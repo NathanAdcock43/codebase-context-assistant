@@ -1452,6 +1452,98 @@
     "warnings": []
   },
   {
+    "path": "tests/test_retrieval.py",
+    "role": "Verify grounded retrieval service behavior and sufficiency checks.",
+    "layer": "tests",
+    "flow": "retrieval_validation",
+    "header_fields": {
+      "ROLE": "Verify grounded retrieval service behavior and sufficiency checks.",
+      "LAYER": "tests",
+      "FLOW": "retrieval_validation",
+      "INPUTS": [
+        "IndexSnapshot records",
+        "sample SourceChunk records",
+        "query text",
+        "retrieval thresholds",
+        "temporary index directories"
+      ],
+      "OUTPUTS": [
+        "retrieval response behavior assertions"
+      ],
+      "UPSTREAM": [
+        "retrieval service implementation",
+        "vector store implementation",
+        "index store implementation",
+        "IndexSnapshot model",
+        "SourceChunk model"
+      ],
+      "DOWNSTREAM": [
+        "local test runs",
+        "future CI guardrails",
+        "FastAPI retrieve endpoint",
+        "future verifier node",
+        "future responder node",
+        "system map review"
+      ],
+      "OWNS": [
+        "retrieval sufficiency tests",
+        "insufficient context tests",
+        "empty query tests",
+        "threshold validation tests",
+        "loaded snapshot retrieval tests"
+      ],
+      "DOES_NOT_OWN": [
+        "scanner tests",
+        "chunker tests",
+        "metadata store tests",
+        "drift detection tests",
+        "API route tests",
+        "LLM answer tests"
+      ],
+      "SIDE_EFFECTS": [
+        "writes temporary JSON index files through pytest tmp_path"
+      ],
+      "STATE": {
+        "reads": [
+          "temporary JSON index files"
+        ],
+        "writes": [
+          "temporary JSON index files"
+        ]
+      },
+      "NOTES": [
+        "These tests protect refusal behavior before adding LLM answer generation.",
+        "The retrieval service returns grounded context but does not generate answers."
+      ]
+    },
+    "imports": [
+      "__future__",
+      "code_context.index_store",
+      "code_context.models",
+      "code_context.retrieval",
+      "pathlib",
+      "pytest"
+    ],
+    "internal_imports": [
+      "code_context.index_store",
+      "code_context.models",
+      "code_context.retrieval"
+    ],
+    "classes": [],
+    "functions": [
+      "test_retrieve_grounded_context_marks_strong_match_as_sufficient",
+      "test_retrieve_grounded_context_marks_empty_query_as_insufficient",
+      "test_retrieve_grounded_context_marks_empty_index_as_insufficient",
+      "test_retrieve_grounded_context_marks_no_matching_results_as_insufficient",
+      "test_retrieve_grounded_context_marks_low_score_result_as_insufficient",
+      "test_load_and_retrieve_context_loads_saved_snapshot",
+      "test_retrieve_grounded_context_rejects_invalid_settings",
+      "_snapshot",
+      "_chunk"
+    ],
+    "warnings": []
+  },
+  {
     "path": "tests/test_scanner.py",
     "role": "Verify repository scanner behavior for supported files, ignored paths, hashes, and metadata.",
     "layer": "tests",
