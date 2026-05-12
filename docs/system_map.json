@@ -13,9 +13,8 @@
         "repository indexing requests",
         "indexed chunk search requests",
         "grounded retrieval requests",
-        "ask requests routed through the optional LangGraph workflow adapter",
-        "drift detection requests",
-        "current repository files for ask-time stale-index checks"
+        "ask requests routed through the reusable ask workflow service",
+        "drift detection requests"
       ],
       "OUTPUTS": [
         "health responses",
@@ -36,8 +35,7 @@
         "JSON index store",
         "repository scanner",
         "retrieval service",
-        "optional LangGraph workflow adapter",
-        "deterministic agent workflow fallback",
+        "ask workflow orchestration service",
         "drift detector",
         "local vector store"
       ],
@@ -47,8 +45,7 @@
         "endpoint orchestration",
         "HTTP error handling for missing indexes",
         "local API route definitions",
-        "API response shaping for ask results",
-        "ask-time stale-index refusal before agent workflow execution"
+        "API response shaping for ask results"
       ],
       "DOES_NOT_OWN": [
         "repository traversal",
@@ -58,6 +55,7 @@
         "retrieval sufficiency logic",
         "drift comparison logic",
         "vector scoring logic",
+        "ask workflow orchestration",
         "optional LangGraph workflow behavior",
         "deterministic agent workflow behavior",
         "LLM prompting"
@@ -66,7 +64,7 @@
         "/index reads repository files and writes a local JSON index",
         "/search reads a local JSON index",
         "/retrieve reads a local JSON index",
-        "/ask reads a local JSON index and repository files for stale-index detection",
+        "/ask reads a local JSON index and repository files through the ask service",
         "/drift reads repository files and a local JSON index"
       ],
       "STATE": {
@@ -80,14 +78,13 @@
       },
       "NOTES": [
         "Keep endpoints thin and delegate core behavior to existing modules.",
-        "Ask uses the optional LangGraph adapter, which falls back to the deterministic workflow when LangGraph is unavailable.",
-        "This API still exposes grounded workflow answers, not LLM-generated answers yet.",
-        "Ask-time stale-index checks prevent the workflow from answering with outdated context."
+        "Ask delegates stale-index checks and workflow execution to the reusable ask service.",
+        "This API still exposes grounded workflow answers, not LLM-generated answers yet."
       ]
     },
     "imports": [
       "__future__",
-      "code_context.agent.langgraph_graph",
+      "code_context.ask",
       "code_context.drift",
       "code_context.index_store",
       "code_context.models",
@@ -100,7 +97,7 @@
       "pydantic"
     ],
     "internal_imports": [
-      "code_context.agent.langgraph_graph",
+      "code_context.ask",
       "code_context.drift",
       "code_context.index_store",
       "code_context.models",
@@ -127,8 +124,6 @@
     "functions": [
       "create_app",
       "_load_snapshot_or_404",
-      "_detect_snapshot_drift",
-      "_build_stale_ask_response",
       "_to_search_result_responses",
       "_to_ask_source_responses"
     ],
@@ -1897,27 +1892,27 @@
   },
   {
     "path": "tests/test_api_langgraph_routing.py",
-    "role": "Verify that the ask API route uses the optional LangGraph workflow adapter.",
+    "role": "Verify that the ask API route uses the reusable ask workflow service.",
     "layer": "tests",
-    "flow": "api_langgraph_routing_validation",
+    "flow": "api_ask_service_routing_validation",
     "header_fields": {
-      "ROLE": "Verify that the ask API route uses the optional LangGraph workflow adapter.",
+      "ROLE": "Verify that the ask API route uses the reusable ask workflow service.",
       "LAYER": "tests",
-      "FLOW": "api_langgraph_routing_validation",
+      "FLOW": "api_ask_service_routing_validation",
       "INPUTS": [
         "temporary repository directories",
         "temporary source files",
         "temporary index directories",
         "HTTP index requests",
         "HTTP ask requests",
-        "monkeypatched optional LangGraph workflow adapter"
+        "monkeypatched ask workflow service"
       ],
       "OUTPUTS": [
         "API routing behavior assertions for ask workflow execution"
       ],
       "UPSTREAM": [
         "FastAPI app implementation",
-        "optional LangGraph workflow adapter",
+        "ask workflow orchestration service",
         "agent state models",
         "indexing pipeline",
         "JSON index store"
@@ -1925,16 +1920,17 @@
       "DOWNSTREAM": [
         "local test runs",
         "future CI guardrails",
-        "future LangGraph ask endpoint integration",
+        "future CLI ask command",
         "future demo scripts",
         "system map review"
       ],
       "OWNS": [
-        "ask endpoint workflow routing tests",
-        "optional LangGraph adapter invocation tests",
-        "API to agent adapter boundary tests"
+        "ask endpoint workflow service routing tests",
+        "API to ask service boundary tests",
+        "ask response shaping tests after service extraction"
       ],
       "DOES_NOT_OWN": [
+        "standalone ask service tests",
         "standalone LangGraph adapter tests",
         "deterministic agent workflow tests",
         "retrieval service unit tests",
@@ -1944,7 +1940,7 @@
       "SIDE_EFFECTS": [
         "writes temporary source files through pytest tmp_path",
         "writes temporary JSON index files through API calls",
-        "monkeypatches the API workflow adapter during the test"
+        "monkeypatches the API ask workflow service during the test"
       ],
       "STATE": {
         "reads": [
@@ -1957,14 +1953,15 @@
         ]
       },
       "NOTES": [
-        "This test protects the seam between the API and the optional LangGraph adapter.",
-        "The adapter itself still owns fallback behavior when LangGraph is unavailable."
+        "This test protects the seam between the API and the reusable ask service.",
+        "The ask service owns optional LangGraph routing and deterministic fallback behavior."
       ]
     },
     "imports": [
       "__future__",
       "code_context.agent.state",
       "code_context.api",
+      "code_context.ask",
       "code_context.models",
       "fastapi.testclient",
       "pathlib"
@@ -1972,11 +1969,110 @@
     "internal_imports": [
       "code_context.agent.state",
       "code_context.api",
+      "code_context.ask",
       "code_context.models"
     ],
     "classes": [],
     "functions": [
-      "test_ask_endpoint_routes_through_optional_langgraph_adapter"
+      "test_ask_endpoint_routes_through_ask_workflow_service"
+    ],
+    "warnings": []
+  },
+  {
+    "path": "tests/test_ask.py",
+    "role": "Verify reusable ask workflow orchestration behavior.",
+    "layer": "tests",
+    "flow": "ask_workflow_orchestration_validation",
+    "header_fields": {
+      "ROLE": "Verify reusable ask workflow orchestration behavior.",
+      "LAYER": "tests",
+      "FLOW": "ask_workflow_orchestration_validation",
+      "INPUTS": [
+        "temporary repository directories",
+        "temporary source files",
+        "IndexSnapshot records",
+        "developer question text",
+        "retrieval thresholds",
+        "modified source files that make indexed context stale",
+        "monkeypatched optional workflow adapter calls"
+      ],
+      "OUTPUTS": [
+        "ask workflow service behavior assertions"
+      ],
+      "UPSTREAM": [
+        "ask workflow orchestration service",
+        "optional LangGraph workflow adapter",
+        "repository scanner",
+        "drift detector",
+        "IndexSnapshot model",
+        "SourceChunk model"
+      ],
+      "DOWNSTREAM": [
+        "local test runs",
+        "future CI guardrails",
+        "FastAPI ask endpoint",
+        "future CLI ask command",
+        "future demo scripts",
+        "system map review"
+      ],
+      "OWNS": [
+        "ask service grounded answer tests",
+        "ask service insufficient-context tests",
+        "ask service stale-index refusal tests",
+        "ask service optional LangGraph adapter invocation tests"
+      ],
+      "DOES_NOT_OWN": [
+        "API route tests",
+        "standalone scanner tests",
+        "standalone chunker tests",
+        "standalone drift tests",
+        "standalone retrieval service tests",
+        "standalone LangGraph adapter tests",
+        "LLM response tests"
+      ],
+      "SIDE_EFFECTS": [
+        "writes temporary source files through pytest tmp_path",
+        "modifies temporary source files to make indexed context stale",
+        "monkeypatches the ask workflow adapter during one test"
+      ],
+      "STATE": {
+        "reads": [
+          "temporary repository files",
+          "in-memory test snapshots"
+        ],
+        "writes": [
+          "temporary repository files"
+        ]
+      },
+      "NOTES": [
+        "These tests keep ask orchestration reusable outside FastAPI.",
+        "API tests should only verify HTTP response shaping after this service exists."
+      ]
+    },
+    "imports": [
+      "__future__",
+      "code_context.agent.state",
+      "code_context.ask",
+      "code_context.models",
+      "code_context.scanner",
+      "pathlib",
+      "pytest"
+    ],
+    "internal_imports": [
+      "code_context.agent.state",
+      "code_context.ask",
+      "code_context.models",
+      "code_context.scanner"
+    ],
+    "classes": [],
+    "functions": [
+      "test_ask_indexed_code_question_returns_grounded_result",
+      "test_ask_indexed_code_question_returns_insufficient_context",
+      "test_ask_indexed_code_question_refuses_when_snapshot_is_stale",
+      "test_ask_indexed_code_question_passes_settings_to_optional_workflow_adapter",
+      "_snapshot",
+      "_file_metadata",
+      "_chunk"
     ],
     "warnings": []
   },
@@ -2664,6 +2760,109 @@
       "test_vector_dimension_must_be_at_least_eight",
       "test_search_limit_must_be_at_least_one",
       "_chunk"
+    ],
+    "warnings": []
+  },
+  {
+    "path": "src/code_context/ask.py",
+    "role": "Orchestrate grounded code question answering over an indexed repository snapshot.",
+    "layer": "application_service",
+    "flow": "ask_workflow_orchestration",
+    "header_fields": {
+      "ROLE": "Orchestrate grounded code question answering over an indexed repository snapshot.",
+      "LAYER": "application_service",
+      "FLOW": "ask_workflow_orchestration",
+      "INPUTS": [
+        "developer question text",
+        "IndexSnapshot records",
+        "retrieval limit",
+        "retrieval score thresholds",
+        "retrieval sufficiency thresholds",
+        "current repository files for stale-index checks",
+        "optional LangGraph runtime availability through the workflow adapter"
+      ],
+      "OUTPUTS": [
+        "AskWorkflowResult records with grounded answers, stale-index refusals, or insufficient-context refusals",
+        "grounded SearchResult records when context is sufficient",
+        "agent step status records when workflow execution reaches the agent"
+      ],
+      "UPSTREAM": [
+        "FastAPI ask endpoint",
+        "future CLI ask command",
+        "future demo scripts",
+        "future LangGraph workflow callers"
+      ],
+      "DOWNSTREAM": [
+        "repository scanner",
+        "drift detector",
+        "optional LangGraph workflow adapter",
+        "deterministic agent workflow fallback",
+        "agent state models",
+        "retrieval result models"
+      ],
+      "OWNS": [
+        "ask workflow orchestration",
+        "ask-time stale-index detection",
+        "stale-index refusal construction",
+        "optional LangGraph adapter invocation",
+        "confidence classification for ask results",
+        "reusable ask result shape for API and future CLI callers"
+      ],
+      "DOES_NOT_OWN": [
+        "HTTP request and response DTOs",
+        "API routing",
+        "repository traversal internals",
+        "file hashing internals",
+        "drift comparison internals",
+        "retrieval scoring",
+        "agent node behavior",
+        "LangGraph graph construction",
+        "LLM prompting"
+      ],
+      "SIDE_EFFECTS": [
+        "reads repository files through scanner for stale-index detection"
+      ],
+      "STATE": {
+        "reads": [
+          "local repository files",
+          "in-memory IndexSnapshot records"
+        ],
+        "writes": [
+          "none"
+        ]
+      },
+      "NOTES": [
+        "Keep ask orchestration independent from FastAPI so CLI and API can share it.",
+        "Refuse before running the agent workflow when indexed context is stale.",
+        "The optional LangGraph adapter owns fallback to the deterministic workflow when LangGraph is unavailable."
+      ]
+    },
+    "imports": [
+      "__future__",
+      "code_context.agent.langgraph_graph",
+      "code_context.agent.state",
+      "code_context.drift",
+      "code_context.models",
+      "code_context.retrieval",
+      "code_context.scanner",
+      "pathlib",
+      "pydantic"
+    ],
+    "internal_imports": [
+      "code_context.agent.langgraph_graph",
+      "code_context.agent.state",
+      "code_context.drift",
+      "code_context.models",
+      "code_context.retrieval",
+      "code_context.scanner"
+    ],
+    "classes": [
+      "AskWorkflowResult"
+    ],
+    "functions": [
+      "ask_indexed_code_question",
+      "detect_snapshot_drift",
+      "build_stale_ask_result"
     ],
     "warnings": []
   }

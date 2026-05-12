@@ -10,9 +10,8 @@ INPUTS:
 - repository indexing requests
 - indexed chunk search requests
 - grounded retrieval requests
-- ask requests routed through the optional LangGraph workflow adapter
+- ask requests routed through the reusable ask workflow service
 - drift detection requests
-- current repository files for ask-time stale-index checks
 
 OUTPUTS:
 - health responses
@@ -33,8 +32,7 @@ DOWNSTREAM:
 - JSON index store
 - repository scanner
 - retrieval service
-- optional LangGraph workflow adapter
-- deterministic agent workflow fallback
+- ask workflow orchestration service
 - drift detector
 - local vector store
 
@@ -45,7 +43,6 @@ OWNS:
 - HTTP error handling for missing indexes
 - local API route definitions
 - API response shaping for ask results
-- ask-time stale-index refusal before agent workflow execution
 
 DOES_NOT_OWN:
 - repository traversal
@@ -55,6 +52,7 @@ DOES_NOT_OWN:
 - retrieval sufficiency logic
 - drift comparison logic
 - vector scoring logic
+- ask workflow orchestration
 - optional LangGraph workflow behavior
 - deterministic agent workflow behavior
 - LLM prompting
@@ -63,7 +61,7 @@ SIDE_EFFECTS:
 - /index reads repository files and writes a local JSON index
 - /search reads a local JSON index
 - /retrieve reads a local JSON index
-- /ask reads a local JSON index and repository files for stale-index detection
+- /ask reads a local JSON index and repository files through the ask service
 - /drift reads repository files and a local JSON index
 
 STATE:
@@ -75,9 +73,8 @@ STATE:
 
 NOTES:
 - Keep endpoints thin and delegate core behavior to existing modules.
-- Ask uses the optional LangGraph adapter, which falls back to the deterministic workflow when LangGraph is unavailable.
+- Ask delegates stale-index checks and workflow execution to the reusable ask service.
 - This API still exposes grounded workflow answers, not LLM-generated answers yet.
-- Ask-time stale-index checks prevent the workflow from answering with outdated context.
 """
 
 from pathlib import Path
@@ -85,10 +82,10 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field, ValidationError
 
-from code_context.agent.langgraph_graph import run_code_question_workflow_with_optional_langgraph
+from code_context.ask import ask_indexed_code_question
 from code_context.drift import detect_drift
 from code_context.index_store import DEFAULT_INDEX_FILENAME, JsonIndexStore
-from code_context.models import DriftReport, IndexSnapshot, SearchResult
+from code_context.models import IndexSnapshot, SearchResult
 from code_context.pipeline import index_repository
 from code_context.retrieval import (
     DEFAULT_MINIMUM_TOP_SCORE,
@@ -97,9 +94,6 @@ from code_context.retrieval import (
 )
 from code_context.scanner import scan_repository
 from code_context.vector_store import search_chunks
-
-
-STALE_INDEX_REFUSAL = "Indexed context is stale. Re-index the repository before asking questions."
 
 
 class HealthResponse(BaseModel):
@@ -306,13 +300,8 @@ def create_app() -> FastAPI:
             index_filename=request.index_filename,
         )
 
-        drift_report = _detect_snapshot_drift(snapshot)
-
-        if drift_report.is_stale:
-            return _build_stale_ask_response(request.question)
-
         try:
-            state = run_code_question_workflow_with_optional_langgraph(
+            result = ask_indexed_code_question(
                 question=request.question,
                 snapshot=snapshot,
                 limit=request.limit,
@@ -321,34 +310,32 @@ def create_app() -> FastAPI:
                 minimum_top_score=request.minimum_top_score,
                 prefer_langgraph=True,
             )
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except NotADirectoryError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         except ValidationError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-        verification = state.verification
-        is_grounded = bool(verification and verification.can_answer and verification.is_grounded)
-        confidence = "grounded" if is_grounded else "insufficient_context"
-        insufficient_reason = None if is_grounded else verification.reason if verification else None
-        results = state.retrieval.results if state.retrieval else []
-
         return AskResponse(
-            question=state.question,
-            answer=state.answer or "",
-            confidence=confidence,
-            is_grounded=is_grounded,
-            is_stale=False,
-            insufficient_reason=insufficient_reason,
-            plan=state.plan,
-            citations=state.citations,
-            sources=_to_ask_source_responses(results),
+            question=result.question,
+            answer=result.answer,
+            confidence=result.confidence,
+            is_grounded=result.is_grounded,
+            is_stale=result.is_stale,
+            insufficient_reason=result.insufficient_reason,
+            plan=result.plan,
+            citations=result.citations,
+            sources=_to_ask_source_responses(result.sources),
             steps=[
                 AskStepResponse(
                     name=step.name,
                     status=step.status.value,
                     notes=step.notes,
                 )
-                for step in state.steps
+                for step in result.steps
             ],
         )
 
@@ -379,35 +366,6 @@ def _load_snapshot_or_404(index_dir: str, *, index_filename: str) -> IndexSnapsh
         return store.load()
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-
-
-def _detect_snapshot_drift(snapshot: IndexSnapshot) -> DriftReport:
-    try:
-        current_files = scan_repository(Path(snapshot.repo_root))
-    except FileNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except NotADirectoryError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    return detect_drift(snapshot=snapshot, current_files=current_files)
-
-
-def _build_stale_ask_response(question: str) -> AskResponse:
-    return AskResponse(
-        question=question.strip(),
-        answer=(
-            "I cannot answer from this index because the indexed context is stale. "
-            "Re-index the repository and ask again."
-        ),
-        confidence="stale_index",
-        is_grounded=False,
-        is_stale=True,
-        insufficient_reason=STALE_INDEX_REFUSAL,
-        plan=[],
-        citations=[],
-        sources=[],
-        steps=[],
-    )
 
 
 def _to_search_result_responses(results: list[SearchResult]) -> list[SearchResultResponse]:
