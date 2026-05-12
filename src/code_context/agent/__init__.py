@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 """
-ROLE: Expose agent workflow state helpers for the codebase context assistant.
+ROLE: Expose agent workflow state and node helpers for the codebase context assistant.
 LAYER: agent
 FLOW: agent_package
 
 INPUTS:
 - agent state model imports
-- agent helper imports
+- agent node helper imports
 
 OUTPUTS:
 - public agent package exports
@@ -19,14 +19,13 @@ UPSTREAM:
 
 DOWNSTREAM:
 - agent state models
+- agent nodes
 - future agent graph
-- future agent nodes
 
 OWNS:
 - public agent package exports
 
 DOES_NOT_OWN:
-- planner behavior
 - retrieval behavior
 - verification behavior
 - response generation
@@ -46,6 +45,7 @@ NOTES:
 - Keep this package small until the agent workflow is actually implemented.
 """
 
+from code_context.agent.nodes import plan_question
 from code_context.agent.state import (
     AgentStep,
     AgentStepStatus,
@@ -61,5 +61,6 @@ __all__ = [
     "CodeQuestionState",
     "VerificationResult",
     "create_initial_state",
+    "plan_question",
     "update_step_status",
 ]

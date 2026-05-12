@@ -116,6 +116,81 @@
     "warnings": []
   },
   {
+    "path": "src/code_context/agent/nodes.py",
+    "role": "Define deterministic agent node functions for the code question workflow.",
+    "layer": "agent",
+    "flow": "agent_nodes",
+    "header_fields": {
+      "ROLE": "Define deterministic agent node functions for the code question workflow.",
+      "LAYER": "agent",
+      "FLOW": "agent_nodes",
+      "INPUTS": [
+        "CodeQuestionState records",
+        "developer question text",
+        "existing agent step status records"
+      ],
+      "OUTPUTS": [
+        "updated CodeQuestionState records",
+        "deterministic plan steps",
+        "updated planner step status"
+      ],
+      "UPSTREAM": [
+        "future LangGraph graph",
+        "future FastAPI ask endpoint",
+        "future agent workflow tests"
+      ],
+      "DOWNSTREAM": [
+        "agent state models",
+        "future retriever node",
+        "future verifier node",
+        "future responder node",
+        "future LangGraph workflow"
+      ],
+      "OWNS": [
+        "deterministic planner node behavior",
+        "default code question plan creation",
+        "planner step status updates"
+      ],
+      "DOES_NOT_OWN": [
+        "retrieval execution",
+        "retrieval sufficiency checks",
+        "verification logic",
+        "response generation",
+        "LLM prompting",
+        "LangGraph edge definitions",
+        "API routing"
+      ],
+      "SIDE_EFFECTS": [
+        "none"
+      ],
+      "STATE": {
+        "reads": [
+          "in-memory agent state"
+        ],
+        "writes": [
+          "none"
+        ]
+      },
+      "NOTES": [
+        "Keep node behavior deterministic until the graph wiring is ready.",
+        "The planner should produce an explainable plan, not a generated answer.",
+        "Future nodes should preserve the same state-copying style."
+      ]
+    },
+    "imports": [
+      "__future__",
+      "code_context.agent.state"
+    ],
+    "internal_imports": [
+      "code_context.agent.state"
+    ],
+    "classes": [],
+    "functions": [
+      "plan_question"
+    ],
+    "warnings": []
+  },
+  {
     "path": "src/code_context/agent/state.py",
     "role": "Define state models for the future code question agent workflow.",
     "layer": "agent",
@@ -1106,6 +1181,85 @@
       "print_summary",
       "_coerce_str",
       "main"
+    ],
+    "warnings": []
+  },
+  {
+    "path": "tests/test_agent_nodes.py",
+    "role": "Verify deterministic agent node behavior.",
+    "layer": "tests",
+    "flow": "agent_node_validation",
+    "header_fields": {
+      "ROLE": "Verify deterministic agent node behavior.",
+      "LAYER": "tests",
+      "FLOW": "agent_node_validation",
+      "INPUTS": [
+        "CodeQuestionState records",
+        "developer question text",
+        "existing agent steps"
+      ],
+      "OUTPUTS": [
+        "agent node behavior assertions"
+      ],
+      "UPSTREAM": [
+        "agent node implementation",
+        "agent state models"
+      ],
+      "DOWNSTREAM": [
+        "local test runs",
+        "future CI guardrails",
+        "future LangGraph workflow tests",
+        "future grounded answer tests",
+        "system map review"
+      ],
+      "OWNS": [
+        "planner node tests",
+        "deterministic plan tests",
+        "planner step status tests",
+        "state copy behavior tests"
+      ],
+      "DOES_NOT_OWN": [
+        "agent state model tests",
+        "retriever node tests",
+        "verifier node tests",
+        "responder node tests",
+        "LangGraph integration tests",
+        "LLM answer tests"
+      ],
+      "SIDE_EFFECTS": [
+        "none"
+      ],
+      "STATE": {
+        "reads": [
+          "in-memory test state"
+        ],
+        "writes": [
+          "none"
+        ]
+      },
+      "NOTES": [
+        "These tests keep the first agent node deterministic.",
+        "No LangGraph behavior is expected in this slice."
+      ]
+    },
+    "imports": [
+      "__future__",
+      "code_context.agent",
+      "code_context.agent.nodes",
+      "code_context.agent.state",
+      "pytest"
+    ],
+    "internal_imports": [
+      "code_context.agent",
+      "code_context.agent.nodes",
+      "code_context.agent.state"
+    ],
+    "classes": [],
+    "functions": [
+      "test_plan_question_adds_default_plan_and_completes_planner_step",
+      "test_plan_question_returns_copy_without_mutating_original_state",
+      "test_plan_question_replaces_existing_plan_deterministically",
+      "test_plan_question_requires_planner_step_to_exist"
     ],
     "warnings": []
   },
