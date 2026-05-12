@@ -116,6 +116,89 @@
     "warnings": []
   },
   {
+    "path": "src/code_context/agent/graph.py",
+    "role": "Run the deterministic code question workflow across planner, retriever, verifier, and responder nodes.",
+    "layer": "agent",
+    "flow": "deterministic_agent_workflow",
+    "header_fields": {
+      "ROLE": "Run the deterministic code question workflow across planner, retriever, verifier, and responder nodes.",
+      "LAYER": "agent",
+      "FLOW": "deterministic_agent_workflow",
+      "INPUTS": [
+        "developer question text",
+        "IndexSnapshot records",
+        "retrieval limit",
+        "retrieval score thresholds",
+        "retrieval sufficiency thresholds"
+      ],
+      "OUTPUTS": [
+        "completed CodeQuestionState records with plan, retrieval, verification, answer, citations, and step statuses"
+      ],
+      "UPSTREAM": [
+        "future FastAPI ask endpoint",
+        "future CLI ask command",
+        "future LangGraph replacement workflow",
+        "agent workflow tests"
+      ],
+      "DOWNSTREAM": [
+        "agent node functions",
+        "agent state models",
+        "retrieval service",
+        "future API ask response models"
+      ],
+      "OWNS": [
+        "deterministic workflow ordering",
+        "planner to retriever to verifier to responder orchestration",
+        "workflow-level input validation through CodeQuestionState construction",
+        "final CodeQuestionState return value"
+      ],
+      "DOES_NOT_OWN": [
+        "planner node internals",
+        "retrieval execution internals",
+        "retrieval sufficiency checks",
+        "verification decision internals",
+        "response construction internals",
+        "LLM prompting",
+        "LangGraph edge definitions",
+        "API routing"
+      ],
+      "SIDE_EFFECTS": [
+        "none"
+      ],
+      "STATE": {
+        "reads": [
+          "in-memory index snapshots"
+        ],
+        "writes": [
+          "none"
+        ]
+      },
+      "NOTES": [
+        "This runner gives us an explainable local workflow before adding LangGraph.",
+        "LangGraph can later wrap or replace this orchestration while preserving the same node behavior.",
+        "Keep the workflow order explicit."
+      ]
+    },
+    "imports": [
+      "__future__",
+      "code_context.agent.nodes",
+      "code_context.agent.state",
+      "code_context.models",
+      "code_context.retrieval"
+    ],
+    "internal_imports": [
+      "code_context.agent.nodes",
+      "code_context.agent.state",
+      "code_context.models",
+      "code_context.retrieval"
+    ],
+    "classes": [],
+    "functions": [
+      "run_code_question_workflow"
+    ],
+    "warnings": []
+  },
+  {
     "path": "src/code_context/agent/nodes.py",
     "role": "Define deterministic agent node functions for the code question workflow.",
     "layer": "agent",
@@ -1212,6 +1295,92 @@
       "print_summary",
       "_coerce_str",
       "main"
+    ],
+    "warnings": []
+  },
+  {
+    "path": "tests/test_agent_graph.py",
+    "role": "Verify deterministic agent workflow runner behavior.",
+    "layer": "tests",
+    "flow": "deterministic_agent_workflow_validation",
+    "header_fields": {
+      "ROLE": "Verify deterministic agent workflow runner behavior.",
+      "LAYER": "tests",
+      "FLOW": "deterministic_agent_workflow_validation",
+      "INPUTS": [
+        "developer question text",
+        "sample IndexSnapshot records",
+        "sample SourceChunk records",
+        "retrieval thresholds"
+      ],
+      "OUTPUTS": [
+        "completed agent workflow state assertions"
+      ],
+      "UPSTREAM": [
+        "deterministic agent workflow runner",
+        "agent node implementation",
+        "agent state models",
+        "IndexSnapshot model",
+        "SourceChunk model"
+      ],
+      "DOWNSTREAM": [
+        "local test runs",
+        "future CI guardrails",
+        "future FastAPI ask endpoint tests",
+        "future LangGraph workflow tests",
+        "system map review"
+      ],
+      "OWNS": [
+        "workflow runner tests",
+        "full node sequence tests",
+        "grounded answer workflow tests",
+        "refusal workflow tests",
+        "workflow state completion tests"
+      ],
+      "DOES_NOT_OWN": [
+        "individual node tests",
+        "retrieval service unit tests",
+        "API route tests",
+        "LangGraph integration tests",
+        "LLM answer tests"
+      ],
+      "SIDE_EFFECTS": [
+        "none"
+      ],
+      "STATE": {
+        "reads": [
+          "in-memory test snapshots"
+        ],
+        "writes": [
+          "none"
+        ]
+      },
+      "NOTES": [
+        "These tests prove the deterministic workflow can run end to end before LangGraph is added.",
+        "The workflow should remain explainable and grounded."
+      ]
+    },
+    "imports": [
+      "__future__",
+      "code_context.agent",
+      "code_context.index_store",
+      "code_context.models",
+      "pydantic",
+      "pytest"
+    ],
+    "internal_imports": [
+      "code_context.agent",
+      "code_context.index_store",
+      "code_context.models"
+    ],
+    "classes": [],
+    "functions": [
+      "test_run_code_question_workflow_returns_grounded_answer",
+      "test_run_code_question_workflow_refuses_when_context_is_insufficient",
+      "test_run_code_question_workflow_refuses_when_index_has_no_chunks",
+      "test_run_code_question_workflow_rejects_empty_question",
+      "_snapshot",
+      "_chunk"
     ],
     "warnings": []
   },
