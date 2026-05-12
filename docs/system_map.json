@@ -1705,6 +1705,95 @@
     "warnings": []
   },
   {
+    "path": "tests/test_api_ask_flow.py",
+    "role": "Verify end-to-end API ask workflows across indexing, grounded answering, stale refusal, and re-index recovery.",
+    "layer": "tests",
+    "flow": "api_ask_flow_validation",
+    "header_fields": {
+      "ROLE": "Verify end-to-end API ask workflows across indexing, grounded answering, stale refusal, and re-index recovery.",
+      "LAYER": "tests",
+      "FLOW": "api_ask_flow_validation",
+      "INPUTS": [
+        "temporary repository directories",
+        "temporary source files",
+        "temporary index directories",
+        "HTTP index requests",
+        "HTTP ask requests",
+        "modified source files that make indexed context stale"
+      ],
+      "OUTPUTS": [
+        "end-to-end ask workflow behavior assertions"
+      ],
+      "UPSTREAM": [
+        "FastAPI app implementation",
+        "indexing pipeline",
+        "JSON index store",
+        "repository scanner",
+        "drift detector",
+        "deterministic agent workflow runner"
+      ],
+      "DOWNSTREAM": [
+        "local test runs",
+        "future CI guardrails",
+        "demo script validation",
+        "future LangGraph workflow integration",
+        "system map review"
+      ],
+      "OWNS": [
+        "end-to-end ask API flow tests",
+        "index to ask success tests",
+        "stale-index refusal flow tests",
+        "re-index recovery tests",
+        "API ask demo-path guardrails"
+      ],
+      "DOES_NOT_OWN": [
+        "standalone scanner tests",
+        "standalone chunker tests",
+        "standalone index store tests",
+        "standalone vector store tests",
+        "standalone retrieval service tests",
+        "standalone agent workflow tests",
+        "LLM response tests",
+        "LangGraph integration tests"
+      ],
+      "SIDE_EFFECTS": [
+        "writes temporary source files through pytest tmp_path",
+        "writes temporary JSON index files through API calls",
+        "modifies temporary source files to make indexed context stale"
+      ],
+      "STATE": {
+        "reads": [
+          "temporary repository files",
+          "temporary JSON index files"
+        ],
+        "writes": [
+          "temporary repository files",
+          "temporary JSON index files"
+        ]
+      },
+      "NOTES": [
+        "These tests protect the local demo flow before LangGraph is added.",
+        "The ask endpoint should answer only from current indexed context.",
+        "Re-indexing should recover from stale-index refusal."
+      ]
+    },
+    "imports": [
+      "__future__",
+      "code_context.api",
+      "fastapi.testclient",
+      "pathlib"
+    ],
+    "internal_imports": [
+      "code_context.api"
+    ],
+    "classes": [],
+    "functions": [
+      "test_ask_flow_refuses_stale_index_then_recovers_after_reindex",
+      "test_drift_and_ask_agree_when_index_is_stale"
+    ],
+    "warnings": []
+  },
+  {
     "path": "tests/test_chunker.py",
     "role": "Verify source chunking behavior, line references, overlap handling, and stable chunk IDs.",
     "layer": "tests",
