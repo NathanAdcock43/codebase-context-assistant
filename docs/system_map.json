@@ -87,6 +87,90 @@
     "warnings": []
   },
   {
+    "path": "src/code_context/chunker.py",
+    "role": "Split source text into deterministic chunks while preserving file and line references.",
+    "layer": "chunking",
+    "flow": "source_chunking",
+    "header_fields": {
+      "ROLE": "Split source text into deterministic chunks while preserving file and line references.",
+      "LAYER": "chunking",
+      "FLOW": "source_chunking",
+      "INPUTS": [
+        "source file content",
+        "repository-relative file path",
+        "language label",
+        "maximum lines per chunk",
+        "overlap lines between chunks"
+      ],
+      "OUTPUTS": [
+        "SourceChunk records with stable chunk IDs and line references"
+      ],
+      "UPSTREAM": [
+        "repository scanner",
+        "future parser",
+        "future indexing command",
+        "future FastAPI index endpoint"
+      ],
+      "DOWNSTREAM": [
+        "metadata index store",
+        "vector store",
+        "retriever",
+        "verifier",
+        "grounded answer generation"
+      ],
+      "OWNS": [
+        "line-based source chunking",
+        "chunk boundary calculation",
+        "overlap handling",
+        "stable chunk ID generation",
+        "source line reference preservation"
+      ],
+      "DOES_NOT_OWN": [
+        "repository traversal",
+        "file metadata hashing",
+        "AST-aware parsing",
+        "metadata persistence",
+        "vector embedding",
+        "semantic retrieval",
+        "LLM prompting"
+      ],
+      "SIDE_EFFECTS": [
+        "chunk_file reads source files from disk"
+      ],
+      "STATE": {
+        "reads": [
+          "source files when chunk_file is used"
+        ],
+        "writes": [
+          "none"
+        ]
+      },
+      "NOTES": [
+        "Keep this chunker line-based for the MVP.",
+        "AST-aware or symbol-aware chunking can be added later if needed.",
+        "The key requirement here is grounded references back to file path and line range."
+      ]
+    },
+    "imports": [
+      "__future__",
+      "code_context.models",
+      "hashlib",
+      "pathlib"
+    ],
+    "internal_imports": [
+      "code_context.models"
+    ],
+    "classes": [],
+    "functions": [
+      "chunk_text",
+      "chunk_file",
+      "build_chunk_id",
+      "_validate_chunk_settings",
+      "_normalize_relative_path"
+    ],
+    "warnings": []
+  },
+  {
     "path": "src/code_context/config.py",
     "role": "Define local configuration values for the codebase context assistant.",
     "layer": "config",
@@ -169,26 +253,33 @@
         "repository file paths",
         "file system metadata",
         "calculated content hashes",
-        "inferred language values"
+        "inferred language values",
+        "source chunk boundaries",
+        "source chunk content"
       ],
       "OUTPUTS": [
-        "FileMetadata"
+        "FileMetadata",
+        "SourceChunk"
       ],
       "UPSTREAM": [
         "repository scanner",
-        "future parser and chunker modules",
+        "source chunker",
+        "future parser modules",
         "future index loading workflows"
       ],
       "DOWNSTREAM": [
         "scanner results",
+        "chunker results",
         "metadata persistence",
         "drift detection",
         "vector indexing",
-        "API response models"
+        "API response models",
+        "grounded answer generation"
       ],
       "OWNS": [
         "shared DTO definitions",
         "file metadata shape",
+        "source chunk shape",
         "stable field names used between project modules"
       ],
       "DOES_NOT_OWN": [
@@ -222,7 +313,8 @@
     ],
     "internal_imports": [],
     "classes": [
-      "FileMetadata"
+      "FileMetadata",
+      "SourceChunk"
     ],
     "functions": [],
     "warnings": []
@@ -333,6 +425,86 @@
       "print_summary",
       "_coerce_str",
       "main"
+    ],
+    "warnings": []
+  },
+  {
+    "path": "tests/test_chunker.py",
+    "role": "Verify source chunking behavior, line references, overlap handling, and stable chunk IDs.",
+    "layer": "tests",
+    "flow": "chunker_validation",
+    "header_fields": {
+      "ROLE": "Verify source chunking behavior, line references, overlap handling, and stable chunk IDs.",
+      "LAYER": "tests",
+      "FLOW": "chunker_validation",
+      "INPUTS": [
+        "sample source text",
+        "temporary source files",
+        "chunk size settings",
+        "overlap settings"
+      ],
+      "OUTPUTS": [
+        "chunker behavior assertions"
+      ],
+      "UPSTREAM": [
+        "chunker implementation",
+        "SourceChunk model"
+      ],
+      "DOWNSTREAM": [
+        "local test runs",
+        "future CI guardrails",
+        "system map review"
+      ],
+      "OWNS": [
+        "line-reference chunking tests",
+        "chunk boundary tests",
+        "overlap behavior tests",
+        "chunk ID stability tests",
+        "file chunking tests"
+      ],
+      "DOES_NOT_OWN": [
+        "scanner tests",
+        "metadata store tests",
+        "drift detection tests",
+        "vector store tests",
+        "API tests",
+        "agent workflow tests"
+      ],
+      "SIDE_EFFECTS": [
+        "writes temporary test files through pytest tmp_path"
+      ],
+      "STATE": {
+        "reads": [
+          "temporary test files"
+        ],
+        "writes": [
+          "temporary test files"
+        ]
+      },
+      "NOTES": [
+        "These tests protect the grounding behavior needed for file and line references.",
+        "Use small examples so chunk boundaries are easy to inspect."
+      ]
+    },
+    "imports": [
+      "__future__",
+      "code_context.chunker",
+      "pathlib",
+      "pytest"
+    ],
+    "internal_imports": [
+      "code_context.chunker"
+    ],
+    "classes": [],
+    "functions": [
+      "test_chunk_text_returns_single_chunk_with_line_references",
+      "test_chunk_text_splits_large_content_by_max_lines",
+      "test_chunk_text_uses_overlap_lines",
+      "test_chunk_text_returns_empty_list_for_empty_content",
+      "test_chunk_text_rejects_invalid_chunk_settings",
+      "test_chunk_file_reads_file_and_preserves_relative_path",
+      "test_chunk_ids_are_stable_for_same_content",
+      "test_chunk_ids_include_normalized_relative_path"
     ],
     "warnings": []
   },

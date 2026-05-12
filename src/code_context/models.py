@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 """
 ROLE: Define shared data models used by the codebase context assistant.
@@ -10,25 +10,32 @@ INPUTS:
 - file system metadata
 - calculated content hashes
 - inferred language values
+- source chunk boundaries
+- source chunk content
 
 OUTPUTS:
 - FileMetadata
+- SourceChunk
 
 UPSTREAM:
 - repository scanner
-- future parser and chunker modules
+- source chunker
+- future parser modules
 - future index loading workflows
 
 DOWNSTREAM:
 - scanner results
+- chunker results
 - metadata persistence
 - drift detection
 - vector indexing
 - API response models
+- grounded answer generation
 
 OWNS:
 - shared DTO definitions
 - file metadata shape
+- source chunk shape
 - stable field names used between project modules
 
 DOES_NOT_OWN:
@@ -59,12 +66,19 @@ from pydantic import BaseModel, Field
 
 
 class FileMetadata(BaseModel):
-    """Metadata collected for a source file during repository scanning."""
-
     path: Path
     relative_path: str
     extension: str
     size_bytes: int
     modified_at: float
     content_hash: str
+    language: str = Field(default="unknown")
+
+
+class SourceChunk(BaseModel):
+    chunk_id: str
+    relative_path: str
+    start_line: int
+    end_line: int
+    content: str
     language: str = Field(default="unknown")
