@@ -116,6 +116,97 @@
     "warnings": []
   },
   {
+    "path": "src/code_context/agent/state.py",
+    "role": "Define state models for the future code question agent workflow.",
+    "layer": "agent",
+    "flow": "agent_state",
+    "header_fields": {
+      "ROLE": "Define state models for the future code question agent workflow.",
+      "LAYER": "agent",
+      "FLOW": "agent_state",
+      "INPUTS": [
+        "developer question text",
+        "planned workflow steps",
+        "grounded retrieval response",
+        "verification result",
+        "generated or refused answer text",
+        "grounded citation strings"
+      ],
+      "OUTPUTS": [
+        "CodeQuestionState",
+        "AgentStep",
+        "VerificationResult"
+      ],
+      "UPSTREAM": [
+        "future FastAPI ask endpoint",
+        "future LangGraph graph",
+        "future planner node",
+        "future retriever node",
+        "future verifier node",
+        "future responder node"
+      ],
+      "DOWNSTREAM": [
+        "future agent graph",
+        "future agent nodes",
+        "future answer generation",
+        "future grounding tests",
+        "future API response models"
+      ],
+      "OWNS": [
+        "agent state shape",
+        "agent step status shape",
+        "verification result shape",
+        "initial state construction",
+        "step status update helper"
+      ],
+      "DOES_NOT_OWN": [
+        "planning logic",
+        "retrieval logic",
+        "verification logic",
+        "response generation",
+        "LLM prompting",
+        "LangGraph edge definitions",
+        "API routing"
+      ],
+      "SIDE_EFFECTS": [
+        "none"
+      ],
+      "STATE": {
+        "reads": [
+          "in-memory agent state"
+        ],
+        "writes": [
+          "none"
+        ]
+      },
+      "NOTES": [
+        "This slice defines structure only.",
+        "Keep the state explicit so the workflow remains explainable.",
+        "The future agent should refuse when retrieval or verification says context is insufficient."
+      ]
+    },
+    "imports": [
+      "__future__",
+      "code_context.models",
+      "enum",
+      "pydantic"
+    ],
+    "internal_imports": [
+      "code_context.models"
+    ],
+    "classes": [
+      "AgentStepStatus",
+      "AgentStep",
+      "VerificationResult",
+      "CodeQuestionState"
+    ],
+    "functions": [
+      "create_initial_state",
+      "update_step_status"
+    ],
+    "warnings": []
+  },
+  {
     "path": "src/code_context/retrieval.py",
     "role": "Retrieve grounded source context from an index snapshot and decide whether it is sufficient.",
     "layer": "retrieval",
@@ -1015,6 +1106,88 @@
       "print_summary",
       "_coerce_str",
       "main"
+    ],
+    "warnings": []
+  },
+  {
+    "path": "tests/test_agent_state.py",
+    "role": "Verify agent state models and helper behavior.",
+    "layer": "tests",
+    "flow": "agent_state_validation",
+    "header_fields": {
+      "ROLE": "Verify agent state models and helper behavior.",
+      "LAYER": "tests",
+      "FLOW": "agent_state_validation",
+      "INPUTS": [
+        "developer question text",
+        "sample retrieval responses",
+        "sample verification results",
+        "agent step status updates"
+      ],
+      "OUTPUTS": [
+        "agent state behavior assertions"
+      ],
+      "UPSTREAM": [
+        "agent state models",
+        "RetrievalResponse model"
+      ],
+      "DOWNSTREAM": [
+        "local test runs",
+        "future CI guardrails",
+        "future LangGraph workflow tests",
+        "future grounded answer tests",
+        "system map review"
+      ],
+      "OWNS": [
+        "initial agent state tests",
+        "step status update tests",
+        "question validation tests",
+        "retrieval attachment tests",
+        "verification attachment tests"
+      ],
+      "DOES_NOT_OWN": [
+        "planner tests",
+        "retriever node tests",
+        "verifier node tests",
+        "responder node tests",
+        "LangGraph integration tests",
+        "LLM answer tests"
+      ],
+      "SIDE_EFFECTS": [
+        "none"
+      ],
+      "STATE": {
+        "reads": [
+          "in-memory test state"
+        ],
+        "writes": [
+          "none"
+        ]
+      },
+      "NOTES": [
+        "These tests keep the future agent workflow state explicit and stable.",
+        "No LangGraph behavior is expected in this slice."
+      ]
+    },
+    "imports": [
+      "__future__",
+      "code_context.agent",
+      "code_context.models",
+      "pydantic",
+      "pytest"
+    ],
+    "internal_imports": [
+      "code_context.agent",
+      "code_context.models"
+    ],
+    "classes": [],
+    "functions": [
+      "test_create_initial_state_trims_question_and_adds_default_steps",
+      "test_code_question_state_rejects_empty_question",
+      "test_update_step_status_returns_updated_copy",
+      "test_update_step_status_rejects_unknown_step",
+      "test_agent_state_can_store_retrieval_response",
+      "test_agent_state_can_store_verification_result_and_refusal_answer"
     ],
     "warnings": []
   },
