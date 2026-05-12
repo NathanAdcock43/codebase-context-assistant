@@ -127,12 +127,15 @@
       "INPUTS": [
         "CodeQuestionState records",
         "developer question text",
-        "existing agent step status records"
+        "existing agent step status records",
+        "IndexSnapshot records",
+        "retrieval thresholds"
       ],
       "OUTPUTS": [
         "updated CodeQuestionState records",
         "deterministic plan steps",
-        "updated planner step status"
+        "grounded retrieval responses attached to state",
+        "updated planner and retriever step statuses"
       ],
       "UPSTREAM": [
         "future LangGraph graph",
@@ -141,7 +144,7 @@
       ],
       "DOWNSTREAM": [
         "agent state models",
-        "future retriever node",
+        "retrieval service",
         "future verifier node",
         "future responder node",
         "future LangGraph workflow"
@@ -149,11 +152,14 @@
       "OWNS": [
         "deterministic planner node behavior",
         "default code question plan creation",
-        "planner step status updates"
+        "planner step status updates",
+        "retriever node orchestration",
+        "retrieval result attachment to agent state",
+        "retriever step status updates"
       ],
       "DOES_NOT_OWN": [
-        "retrieval execution",
         "retrieval sufficiency checks",
+        "vector scoring implementation",
         "verification logic",
         "response generation",
         "LLM prompting",
@@ -165,7 +171,8 @@
       ],
       "STATE": {
         "reads": [
-          "in-memory agent state"
+          "in-memory agent state",
+          "in-memory index snapshots"
         ],
         "writes": [
           "none"
@@ -174,19 +181,25 @@
       "NOTES": [
         "Keep node behavior deterministic until the graph wiring is ready.",
         "The planner should produce an explainable plan, not a generated answer.",
+        "The retriever should attach grounded context, not decide the final answer.",
         "Future nodes should preserve the same state-copying style."
       ]
     },
     "imports": [
       "__future__",
-      "code_context.agent.state"
+      "code_context.agent.state",
+      "code_context.models",
+      "code_context.retrieval"
     ],
     "internal_imports": [
-      "code_context.agent.state"
+      "code_context.agent.state",
+      "code_context.models",
+      "code_context.retrieval"
     ],
     "classes": [],
     "functions": [
-      "plan_question"
+      "plan_question",
+      "retrieve_context_for_question"
     ],
     "warnings": []
   },
@@ -1196,14 +1209,19 @@
       "INPUTS": [
         "CodeQuestionState records",
         "developer question text",
-        "existing agent steps"
+        "existing agent steps",
+        "sample IndexSnapshot records",
+        "sample SourceChunk records"
       ],
       "OUTPUTS": [
         "agent node behavior assertions"
       ],
       "UPSTREAM": [
         "agent node implementation",
-        "agent state models"
+        "agent state models",
+        "retrieval service",
+        "IndexSnapshot model",
+        "SourceChunk model"
       ],
       "DOWNSTREAM": [
         "local test runs",
@@ -1214,13 +1232,14 @@
       ],
       "OWNS": [
         "planner node tests",
+        "retriever node tests",
         "deterministic plan tests",
         "planner step status tests",
+        "retriever step status tests",
         "state copy behavior tests"
       ],
       "DOES_NOT_OWN": [
         "agent state model tests",
-        "retriever node tests",
         "verifier node tests",
         "responder node tests",
         "LangGraph integration tests",
@@ -1231,14 +1250,15 @@
       ],
       "STATE": {
         "reads": [
-          "in-memory test state"
+          "in-memory test state",
+          "in-memory test snapshots"
         ],
         "writes": [
           "none"
         ]
       },
       "NOTES": [
-        "These tests keep the first agent node deterministic.",
+        "These tests keep early agent nodes deterministic.",
         "No LangGraph behavior is expected in this slice."
       ]
     },
@@ -1247,19 +1267,29 @@
       "code_context.agent",
       "code_context.agent.nodes",
       "code_context.agent.state",
+      "code_context.index_store",
+      "code_context.models",
       "pytest"
     ],
     "internal_imports": [
       "code_context.agent",
       "code_context.agent.nodes",
-      "code_context.agent.state"
+      "code_context.agent.state",
+      "code_context.index_store",
+      "code_context.models"
     ],
     "classes": [],
     "functions": [
       "test_plan_question_adds_default_plan_and_completes_planner_step",
       "test_plan_question_returns_copy_without_mutating_original_state",
       "test_plan_question_replaces_existing_plan_deterministically",
-      "test_plan_question_requires_planner_step_to_exist"
+      "test_plan_question_requires_planner_step_to_exist",
+      "test_retrieve_context_for_question_attaches_sufficient_retrieval",
+      "test_retrieve_context_for_question_records_insufficient_context",
+      "test_retrieve_context_for_question_returns_copy_without_mutating_original_state",
+      "test_retrieve_context_for_question_requires_retriever_step_to_exist",
+      "_snapshot",
+      "_chunk"
     ],
     "warnings": []
   },

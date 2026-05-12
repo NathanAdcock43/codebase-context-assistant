@@ -26,7 +26,7 @@ OWNS:
 - public agent package exports
 
 DOES_NOT_OWN:
-- retrieval behavior
+- retrieval sufficiency logic
 - verification behavior
 - response generation
 - LangGraph wiring
@@ -45,7 +45,7 @@ NOTES:
 - Keep this package small until the agent workflow is actually implemented.
 """
 
-from code_context.agent.nodes import plan_question
+from code_context.agent.nodes import plan_question, retrieve_context_for_question
 from code_context.agent.state import (
     AgentStep,
     AgentStepStatus,
@@ -62,5 +62,6 @@ __all__ = [
     "VerificationResult",
     "create_initial_state",
     "plan_question",
+    "retrieve_context_for_question",
     "update_step_status",
 ]
