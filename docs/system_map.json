@@ -216,6 +216,106 @@
     "warnings": []
   },
   {
+    "path": "src/code_context/agent/langgraph_graph.py",
+    "role": "Provide an optional LangGraph adapter for the code question workflow.",
+    "layer": "agent",
+    "flow": "langgraph_agent_workflow_adapter",
+    "header_fields": {
+      "ROLE": "Provide an optional LangGraph adapter for the code question workflow.",
+      "LAYER": "agent",
+      "FLOW": "langgraph_agent_workflow_adapter",
+      "INPUTS": [
+        "developer question text",
+        "IndexSnapshot records",
+        "retrieval limit",
+        "retrieval score thresholds",
+        "retrieval sufficiency thresholds",
+        "optional LangGraph runtime dependency"
+      ],
+      "OUTPUTS": [
+        "completed CodeQuestionState records with plan, retrieval, verification, answer, citations, and step statuses",
+        "compiled LangGraph workflows when LangGraph is installed",
+        "deterministic fallback workflow results when requested or when LangGraph is unavailable"
+      ],
+      "UPSTREAM": [
+        "future FastAPI ask endpoint",
+        "future CLI ask command",
+        "future LangGraph workflow tests",
+        "future demo scripts"
+      ],
+      "DOWNSTREAM": [
+        "agent node functions",
+        "deterministic workflow runner",
+        "agent state models",
+        "retrieval service",
+        "future API ask response models"
+      ],
+      "OWNS": [
+        "optional LangGraph availability detection",
+        "LangGraph workflow construction",
+        "LangGraph node wrapping around existing deterministic node functions",
+        "deterministic fallback selection for local development",
+        "LangGraph-specific workflow execution"
+      ],
+      "DOES_NOT_OWN": [
+        "planner node internals",
+        "retrieval execution internals",
+        "retrieval sufficiency checks",
+        "verification decision internals",
+        "response construction internals",
+        "API routing",
+        "LLM prompting"
+      ],
+      "SIDE_EFFECTS": [
+        "none"
+      ],
+      "STATE": {
+        "reads": [
+          "in-memory index snapshots"
+        ],
+        "writes": [
+          "none"
+        ]
+      },
+      "NOTES": [
+        "Keep this as an adapter around existing tested nodes.",
+        "Do not replace the deterministic graph runner until the LangGraph path is proven.",
+        "This module should allow the project to keep passing locally even before LangGraph is installed."
+      ]
+    },
+    "imports": [
+      "__future__",
+      "code_context.agent.graph",
+      "code_context.agent.nodes",
+      "code_context.agent.state",
+      "code_context.models",
+      "code_context.retrieval",
+      "typing"
+    ],
+    "internal_imports": [
+      "code_context.agent.graph",
+      "code_context.agent.nodes",
+      "code_context.agent.state",
+      "code_context.models",
+      "code_context.retrieval"
+    ],
+    "classes": [
+      "LangGraphCodeQuestionState"
+    ],
+    "functions": [
+      "is_langgraph_available",
+      "build_langgraph_code_question_workflow",
+      "run_langgraph_code_question_workflow",
+      "run_code_question_workflow_with_optional_langgraph",
+      "_planner_node",
+      "_retriever_node",
+      "_verifier_node",
+      "_responder_node",
+      "_require_agent_state"
+    ],
+    "warnings": []
+  },
+  {
     "path": "src/code_context/agent/nodes.py",
     "role": "Define deterministic agent node functions for the code question workflow.",
     "layer": "agent",
@@ -2041,6 +2141,94 @@
       "test_save_and_load_index_snapshot_helpers_round_trip",
       "_sample_file_metadata",
       "_sample_source_chunk"
+    ],
+    "warnings": []
+  },
+  {
+    "path": "tests/test_langgraph_graph.py",
+    "role": "Verify optional LangGraph workflow adapter behavior.",
+    "layer": "tests",
+    "flow": "langgraph_agent_workflow_adapter_validation",
+    "header_fields": {
+      "ROLE": "Verify optional LangGraph workflow adapter behavior.",
+      "LAYER": "tests",
+      "FLOW": "langgraph_agent_workflow_adapter_validation",
+      "INPUTS": [
+        "developer question text",
+        "sample IndexSnapshot records",
+        "sample SourceChunk records",
+        "retrieval thresholds",
+        "optional LangGraph availability state"
+      ],
+      "OUTPUTS": [
+        "optional LangGraph adapter behavior assertions"
+      ],
+      "UPSTREAM": [
+        "optional LangGraph workflow adapter",
+        "deterministic agent workflow runner",
+        "agent state models",
+        "IndexSnapshot model",
+        "SourceChunk model"
+      ],
+      "DOWNSTREAM": [
+        "local test runs",
+        "future CI guardrails",
+        "future FastAPI ask endpoint LangGraph integration",
+        "future demo scripts",
+        "system map review"
+      ],
+      "OWNS": [
+        "optional LangGraph availability tests",
+        "deterministic fallback tests",
+        "LangGraph missing-dependency guardrail tests",
+        "optional runner delegation tests"
+      ],
+      "DOES_NOT_OWN": [
+        "individual agent node tests",
+        "retrieval service unit tests",
+        "API route tests",
+        "LLM answer tests",
+        "ChromaDB tests"
+      ],
+      "SIDE_EFFECTS": [
+        "none"
+      ],
+      "STATE": {
+        "reads": [
+          "in-memory test snapshots"
+        ],
+        "writes": [
+          "none"
+        ]
+      },
+      "NOTES": [
+        "These tests keep LangGraph integration low-risk.",
+        "The deterministic workflow should remain usable even when LangGraph is not installed.",
+        "A later slice can switch API ask routing to this adapter after the LangGraph path is proven."
+      ]
+    },
+    "imports": [
+      "__future__",
+      "code_context.agent",
+      "code_context.agent.graph",
+      "code_context.agent.state",
+      "code_context.models",
+      "pathlib",
+      "pytest"
+    ],
+    "internal_imports": [
+      "code_context.agent",
+      "code_context.agent.graph",
+      "code_context.agent.state",
+      "code_context.models"
+    ],
+    "classes": [],
+    "functions": [
+      "test_optional_langgraph_runner_falls_back_to_deterministic_workflow",
+      "test_build_langgraph_workflow_raises_clear_error_when_dependency_is_missing",
+      "test_optional_langgraph_runner_delegates_to_langgraph_when_available",
+      "_snapshot",
+      "_chunk"
     ],
     "warnings": []
   },
