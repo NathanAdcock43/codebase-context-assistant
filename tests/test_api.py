@@ -1,0 +1,230 @@
+from __future__ import annotations
+
+"""
+ROLE: Verify FastAPI endpoints for health, indexing, search, and drift detection.
+LAYER: tests
+FLOW: api_validation
+
+INPUTS:
+- temporary repository directories
+- temporary index directories
+- HTTP request payloads
+- indexed source snapshots
+
+OUTPUTS:
+- API response behavior assertions
+
+UPSTREAM:
+- FastAPI app implementation
+- indexing pipeline
+- JSON index store
+- vector store
+- drift detector
+
+DOWNSTREAM:
+- local test runs
+- future CI guardrails
+- demo scripts
+- future agent workflow integration
+- system map review
+
+OWNS:
+- API route tests
+- request and response shape tests
+- endpoint integration tests
+- missing index HTTP behavior tests
+- drift endpoint tests
+
+DOES_NOT_OWN:
+- standalone scanner tests
+- standalone chunker tests
+- standalone index store tests
+- standalone vector store tests
+- agent workflow tests
+- LLM response tests
+
+SIDE_EFFECTS:
+- writes temporary source files through pytest tmp_path
+- writes temporary JSON index files through API calls
+
+STATE:
+  reads:
+    - temporary repository files
+    - temporary JSON index files
+  writes:
+    - temporary repository files
+    - temporary JSON index files
+
+NOTES:
+- These tests keep API endpoints thin and grounded in deterministic project behavior.
+- The API does not generate LLM answers yet.
+"""
+
+from pathlib import Path
+
+from fastapi.testclient import TestClient
+
+from code_context.api import create_app
+
+
+def test_health_endpoint_returns_ok() -> None:
+    client = TestClient(create_app())
+
+    response = client.get("/health")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+
+
+def test_index_endpoint_indexes_repository_and_returns_summary(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    source_file = repo / "main.py"
+    source_file.write_bytes(b"def main():\n    return 'ok'\n")
+
+    index_dir = tmp_path / ".code_context_index"
+    client = TestClient(create_app())
+
+    response = client.post(
+        "/index",
+        json={
+            "repo_path": str(repo),
+            "index_dir": str(index_dir),
+            "max_lines": 10,
+            "overlap_lines": 0,
+        },
+    )
+
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["repo_root"] == str(repo.resolve())
+    assert body["file_count"] == 1
+    assert body["chunk_count"] == 1
+    assert body["indexed_at"] > 0
+    assert Path(body["index_path"]).exists()
+
+
+def test_search_endpoint_returns_grounded_chunk_results(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    scanner_file = repo / "scanner.py"
+    scanner_file.write_bytes(
+        b"def calculate_file_hash(path):\n"
+        b"    return hashlib.sha256(path.read_bytes()).hexdigest()\n"
+    )
+
+    chunker_file = repo / "chunker.py"
+    chunker_file.write_bytes(
+        b"def chunk_text(content):\n"
+        b"    return content.splitlines()\n"
+    )
+
+    index_dir = tmp_path / ".code_context_index"
+    client = TestClient(create_app())
+
+    index_response = client.post(
+        "/index",
+        json={
+            "repo_path": str(repo),
+            "index_dir": str(index_dir),
+            "max_lines": 10,
+            "overlap_lines": 0,
+        },
+    )
+    assert index_response.status_code == 200
+
+    search_response = client.post(
+        "/search",
+        json={
+            "index_dir": str(index_dir),
+            "query": "calculate file hash",
+            "limit": 1,
+        },
+    )
+
+    body = search_response.json()
+
+    assert search_response.status_code == 200
+    assert body["query"] == "calculate file hash"
+    assert body["result_count"] == 1
+    assert body["results"][0]["relative_path"] == "scanner.py"
+    assert body["results"][0]["start_line"] == 1
+    assert body["results"][0]["end_line"] == 2
+    assert body["results"][0]["score"] > 0
+    assert "calculate_file_hash" in body["results"][0]["content"]
+
+
+def test_search_endpoint_returns_404_when_index_is_missing(tmp_path: Path) -> None:
+    client = TestClient(create_app())
+
+    response = client.post(
+        "/search",
+        json={
+            "index_dir": str(tmp_path / "missing_index"),
+            "query": "hash",
+        },
+    )
+
+    assert response.status_code == 404
+    assert "Index file does not exist" in response.json()["detail"]
+
+
+def test_drift_endpoint_reports_modified_file_after_indexing(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    source_file = repo / "main.py"
+    source_file.write_bytes(b"print('before')\n")
+
+    index_dir = tmp_path / ".code_context_index"
+    client = TestClient(create_app())
+
+    index_response = client.post(
+        "/index",
+        json={
+            "repo_path": str(repo),
+            "index_dir": str(index_dir),
+            "max_lines": 10,
+            "overlap_lines": 0,
+        },
+    )
+    assert index_response.status_code == 200
+
+    source_file.write_bytes(b"print('after')\n")
+
+    drift_response = client.post(
+        "/drift",
+        json={
+            "repo_path": str(repo),
+            "index_dir": str(index_dir),
+        },
+    )
+
+    body = drift_response.json()
+
+    assert drift_response.status_code == 200
+    assert body["is_stale"] is True
+    assert [item["relative_path"] for item in body["modified"]] == ["main.py"]
+    assert body["added"] == []
+    assert body["removed"] == []
+
+
+def test_drift_endpoint_returns_404_when_index_is_missing(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    client = TestClient(create_app())
+
+    response = client.post(
+        "/drift",
+        json={
+            "repo_path": str(repo),
+            "index_dir": str(tmp_path / "missing_index"),
+        },
+    )
+
+    assert response.status_code == 404
+    assert "Index file does not exist" in response.json()["detail"]

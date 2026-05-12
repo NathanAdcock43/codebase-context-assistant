@@ -1,5 +1,109 @@
 [
   {
+    "path": "src/code_context/api.py",
+    "role": "Expose local codebase indexing, search, and drift detection through FastAPI endpoints.",
+    "layer": "api",
+    "flow": "local_http_api",
+    "header_fields": {
+      "ROLE": "Expose local codebase indexing, search, and drift detection through FastAPI endpoints.",
+      "LAYER": "api",
+      "FLOW": "local_http_api",
+      "INPUTS": [
+        "HTTP health requests",
+        "repository indexing requests",
+        "indexed chunk search requests",
+        "drift detection requests"
+      ],
+      "OUTPUTS": [
+        "health responses",
+        "index summary responses",
+        "search result responses with grounded file and line references",
+        "drift report responses"
+      ],
+      "UPSTREAM": [
+        "local developer HTTP clients",
+        "future CLI server command",
+        "future demo scripts",
+        "future LangGraph workflow callers"
+      ],
+      "DOWNSTREAM": [
+        "repository indexing pipeline",
+        "JSON index store",
+        "repository scanner",
+        "drift detector",
+        "local vector store"
+      ],
+      "OWNS": [
+        "FastAPI application creation",
+        "request and response DTOs for HTTP routes",
+        "endpoint orchestration",
+        "HTTP error handling for missing indexes",
+        "local API route definitions"
+      ],
+      "DOES_NOT_OWN": [
+        "repository traversal",
+        "file hashing",
+        "source chunking",
+        "JSON persistence internals",
+        "drift comparison logic",
+        "vector scoring logic",
+        "LLM prompting",
+        "agent workflow behavior"
+      ],
+      "SIDE_EFFECTS": [
+        "/index reads repository files and writes a local JSON index",
+        "/search reads a local JSON index",
+        "/drift reads repository files and a local JSON index"
+      ],
+      "STATE": {
+        "reads": [
+          "local repository files",
+          "local JSON index file"
+        ],
+        "writes": [
+          "local JSON index file through /index"
+        ]
+      },
+      "NOTES": [
+        "Keep endpoints thin and delegate core behavior to existing modules.",
+        "This API exposes grounded context retrieval, not generated answers yet.",
+        "Agent and LLM behavior should be added after these deterministic routes are stable."
+      ]
+    },
+    "imports": [
+      "__future__",
+      "code_context.drift",
+      "code_context.index_store",
+      "code_context.pipeline",
+      "code_context.scanner",
+      "code_context.vector_store",
+      "fastapi",
+      "pathlib",
+      "pydantic"
+    ],
+    "internal_imports": [
+      "code_context.drift",
+      "code_context.index_store",
+      "code_context.pipeline",
+      "code_context.scanner",
+      "code_context.vector_store"
+    ],
+    "classes": [
+      "HealthResponse",
+      "IndexRequest",
+      "IndexResponse",
+      "SearchRequest",
+      "SearchResultResponse",
+      "SearchResponse",
+      "DriftRequest"
+    ],
+    "functions": [
+      "create_app",
+      "_load_snapshot_or_404"
+    ],
+    "warnings": []
+  },
+  {
     "path": "src/code_context/vector_store.py",
     "role": "Provide deterministic local vector-style retrieval over source chunks.",
     "layer": "retrieval",
@@ -804,6 +908,92 @@
       "print_summary",
       "_coerce_str",
       "main"
+    ],
+    "warnings": []
+  },
+  {
+    "path": "tests/test_api.py",
+    "role": "Verify FastAPI endpoints for health, indexing, search, and drift detection.",
+    "layer": "tests",
+    "flow": "api_validation",
+    "header_fields": {
+      "ROLE": "Verify FastAPI endpoints for health, indexing, search, and drift detection.",
+      "LAYER": "tests",
+      "FLOW": "api_validation",
+      "INPUTS": [
+        "temporary repository directories",
+        "temporary index directories",
+        "HTTP request payloads",
+        "indexed source snapshots"
+      ],
+      "OUTPUTS": [
+        "API response behavior assertions"
+      ],
+      "UPSTREAM": [
+        "FastAPI app implementation",
+        "indexing pipeline",
+        "JSON index store",
+        "vector store",
+        "drift detector"
+      ],
+      "DOWNSTREAM": [
+        "local test runs",
+        "future CI guardrails",
+        "demo scripts",
+        "future agent workflow integration",
+        "system map review"
+      ],
+      "OWNS": [
+        "API route tests",
+        "request and response shape tests",
+        "endpoint integration tests",
+        "missing index HTTP behavior tests",
+        "drift endpoint tests"
+      ],
+      "DOES_NOT_OWN": [
+        "standalone scanner tests",
+        "standalone chunker tests",
+        "standalone index store tests",
+        "standalone vector store tests",
+        "agent workflow tests",
+        "LLM response tests"
+      ],
+      "SIDE_EFFECTS": [
+        "writes temporary source files through pytest tmp_path",
+        "writes temporary JSON index files through API calls"
+      ],
+      "STATE": {
+        "reads": [
+          "temporary repository files",
+          "temporary JSON index files"
+        ],
+        "writes": [
+          "temporary repository files",
+          "temporary JSON index files"
+        ]
+      },
+      "NOTES": [
+        "These tests keep API endpoints thin and grounded in deterministic project behavior.",
+        "The API does not generate LLM answers yet."
+      ]
+    },
+    "imports": [
+      "__future__",
+      "code_context.api",
+      "fastapi.testclient",
+      "pathlib"
+    ],
+    "internal_imports": [
+      "code_context.api"
+    ],
+    "classes": [],
+    "functions": [
+      "test_health_endpoint_returns_ok",
+      "test_index_endpoint_indexes_repository_and_returns_summary",
+      "test_search_endpoint_returns_grounded_chunk_results",
+      "test_search_endpoint_returns_404_when_index_is_missing",
+      "test_drift_endpoint_reports_modified_file_after_indexing",
+      "test_drift_endpoint_returns_404_when_index_is_missing"
     ],
     "warnings": []
   },

@@ -11,8 +11,15 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+    "httpx",
     "pytest",
     "ruff",
 ]
 
 [tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
