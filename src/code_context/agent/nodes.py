@@ -11,12 +11,14 @@ INPUTS:
 - existing agent step status records
 - IndexSnapshot records
 - retrieval thresholds
+- grounded retrieval responses
 
 OUTPUTS:
 - updated CodeQuestionState records
 - deterministic plan steps
 - grounded retrieval responses attached to state
-- updated planner and retriever step statuses
+- verification results attached to state
+- updated planner, retriever, and verifier step statuses
 
 UPSTREAM:
 - future LangGraph graph
@@ -26,7 +28,6 @@ UPSTREAM:
 DOWNSTREAM:
 - agent state models
 - retrieval service
-- future verifier node
 - future responder node
 - future LangGraph workflow
 
@@ -37,11 +38,13 @@ OWNS:
 - retriever node orchestration
 - retrieval result attachment to agent state
 - retriever step status updates
+- verifier node behavior
+- verification result attachment to agent state
+- verifier step status updates
 
 DOES_NOT_OWN:
 - retrieval sufficiency checks
 - vector scoring implementation
-- verification logic
 - response generation
 - LLM prompting
 - LangGraph edge definitions
@@ -61,10 +64,16 @@ NOTES:
 - Keep node behavior deterministic until the graph wiring is ready.
 - The planner should produce an explainable plan, not a generated answer.
 - The retriever should attach grounded context, not decide the final answer.
+- The verifier should make a grounded sufficiency decision, not generate the final answer.
 - Future nodes should preserve the same state-copying style.
 """
 
-from code_context.agent.state import AgentStepStatus, CodeQuestionState, update_step_status
+from code_context.agent.state import (
+    AgentStepStatus,
+    CodeQuestionState,
+    VerificationResult,
+    update_step_status,
+)
 from code_context.models import IndexSnapshot
 from code_context.retrieval import (
     DEFAULT_MINIMUM_TOP_SCORE,
@@ -131,4 +140,51 @@ def retrieve_context_for_question(
         step_name="retriever",
         status=AgentStepStatus.completed,
         notes=notes,
+    )
+
+
+def verify_retrieval_for_answer(state: CodeQuestionState) -> CodeQuestionState:
+    """Return state with a verification decision based on attached retrieval context."""
+    verification = _build_verification_result(state)
+    state_with_verification = state.model_copy(update={"verification": verification})
+
+    if verification.can_answer:
+        notes = ["Verified retrieval context is sufficient and grounded."]
+    else:
+        notes = [f"Verification failed: {verification.reason}"]
+
+    return update_step_status(
+        state_with_verification,
+        step_name="verifier",
+        status=AgentStepStatus.completed,
+        notes=notes,
+    )
+
+
+def _build_verification_result(state: CodeQuestionState) -> VerificationResult:
+    if state.retrieval is None:
+        return VerificationResult(
+            can_answer=False,
+            is_grounded=False,
+            reason="No retrieval results are attached to the agent state.",
+        )
+
+    if not state.retrieval.is_sufficient:
+        return VerificationResult(
+            can_answer=False,
+            is_grounded=False,
+            reason=state.retrieval.insufficient_reason or "Retrieved context was insufficient.",
+        )
+
+    if not state.retrieval.results:
+        return VerificationResult(
+            can_answer=False,
+            is_grounded=False,
+            reason="No grounded retrieval results are available.",
+        )
+
+    return VerificationResult(
+        can_answer=True,
+        is_grounded=True,
+        reason=None,
     )

@@ -129,13 +129,15 @@
         "developer question text",
         "existing agent step status records",
         "IndexSnapshot records",
-        "retrieval thresholds"
+        "retrieval thresholds",
+        "grounded retrieval responses"
       ],
       "OUTPUTS": [
         "updated CodeQuestionState records",
         "deterministic plan steps",
         "grounded retrieval responses attached to state",
-        "updated planner and retriever step statuses"
+        "verification results attached to state",
+        "updated planner, retriever, and verifier step statuses"
       ],
       "UPSTREAM": [
         "future LangGraph graph",
@@ -145,7 +147,6 @@
       "DOWNSTREAM": [
         "agent state models",
         "retrieval service",
-        "future verifier node",
         "future responder node",
         "future LangGraph workflow"
       ],
@@ -155,12 +156,14 @@
         "planner step status updates",
         "retriever node orchestration",
         "retrieval result attachment to agent state",
-        "retriever step status updates"
+        "retriever step status updates",
+        "verifier node behavior",
+        "verification result attachment to agent state",
+        "verifier step status updates"
       ],
       "DOES_NOT_OWN": [
         "retrieval sufficiency checks",
         "vector scoring implementation",
-        "verification logic",
         "response generation",
         "LLM prompting",
         "LangGraph edge definitions",
@@ -182,6 +185,7 @@
         "Keep node behavior deterministic until the graph wiring is ready.",
         "The planner should produce an explainable plan, not a generated answer.",
         "The retriever should attach grounded context, not decide the final answer.",
+        "The verifier should make a grounded sufficiency decision, not generate the final answer.",
         "Future nodes should preserve the same state-copying style."
       ]
     },
@@ -199,7 +203,9 @@
     "classes": [],
     "functions": [
       "plan_question",
-      "retrieve_context_for_question"
+      "retrieve_context_for_question",
+      "verify_retrieval_for_answer",
+      "_build_verification_result"
     ],
     "warnings": []
   },
@@ -1211,7 +1217,8 @@
         "developer question text",
         "existing agent steps",
         "sample IndexSnapshot records",
-        "sample SourceChunk records"
+        "sample SourceChunk records",
+        "sample retrieval responses"
       ],
       "OUTPUTS": [
         "agent node behavior assertions"
@@ -1221,7 +1228,8 @@
         "agent state models",
         "retrieval service",
         "IndexSnapshot model",
-        "SourceChunk model"
+        "SourceChunk model",
+        "RetrievalResponse model"
       ],
       "DOWNSTREAM": [
         "local test runs",
@@ -1233,14 +1241,15 @@
       "OWNS": [
         "planner node tests",
         "retriever node tests",
+        "verifier node tests",
         "deterministic plan tests",
         "planner step status tests",
         "retriever step status tests",
+        "verifier step status tests",
         "state copy behavior tests"
       ],
       "DOES_NOT_OWN": [
         "agent state model tests",
-        "verifier node tests",
         "responder node tests",
         "LangGraph integration tests",
         "LLM answer tests"
@@ -1288,8 +1297,15 @@
       "test_retrieve_context_for_question_records_insufficient_context",
       "test_retrieve_context_for_question_returns_copy_without_mutating_original_state",
       "test_retrieve_context_for_question_requires_retriever_step_to_exist",
+      "test_verify_retrieval_for_answer_marks_sufficient_retrieval_as_answerable",
+      "test_verify_retrieval_for_answer_marks_missing_retrieval_as_not_answerable",
+      "test_verify_retrieval_for_answer_uses_retrieval_insufficient_reason",
+      "test_verify_retrieval_for_answer_rejects_sufficient_retrieval_without_results",
+      "test_verify_retrieval_for_answer_returns_copy_without_mutating_original_state",
+      "test_verify_retrieval_for_answer_requires_verifier_step_to_exist",
       "_snapshot",
-      "_chunk"
+      "_chunk",
+      "_search_result_chunk"
     ],
     "warnings": []
   },

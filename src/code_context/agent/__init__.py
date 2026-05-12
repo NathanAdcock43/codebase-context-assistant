@@ -27,7 +27,7 @@ OWNS:
 
 DOES_NOT_OWN:
 - retrieval sufficiency logic
-- verification behavior
+- verification decision internals
 - response generation
 - LangGraph wiring
 - API routing
@@ -45,7 +45,11 @@ NOTES:
 - Keep this package small until the agent workflow is actually implemented.
 """
 
-from code_context.agent.nodes import plan_question, retrieve_context_for_question
+from code_context.agent.nodes import (
+    plan_question,
+    retrieve_context_for_question,
+    verify_retrieval_for_answer,
+)
 from code_context.agent.state import (
     AgentStep,
     AgentStepStatus,
@@ -64,4 +68,5 @@ __all__ = [
     "plan_question",
     "retrieve_context_for_question",
     "update_step_status",
+    "verify_retrieval_for_answer",
 ]
