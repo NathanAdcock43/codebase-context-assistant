@@ -1,5 +1,94 @@
 [
   {
+    "path": "src/code_context/vector_store.py",
+    "role": "Provide deterministic local vector-style retrieval over source chunks.",
+    "layer": "retrieval",
+    "flow": "local_vector_search",
+    "header_fields": {
+      "ROLE": "Provide deterministic local vector-style retrieval over source chunks.",
+      "LAYER": "retrieval",
+      "FLOW": "local_vector_search",
+      "INPUTS": [
+        "SourceChunk records",
+        "developer query text",
+        "embedding dimension",
+        "result limit",
+        "minimum score threshold"
+      ],
+      "OUTPUTS": [
+        "SearchResult records ordered by descending relevance score"
+      ],
+      "UPSTREAM": [
+        "source chunker",
+        "index store",
+        "future FastAPI ask endpoint",
+        "future retriever node"
+      ],
+      "DOWNSTREAM": [
+        "verifier",
+        "responder",
+        "grounded answer generation",
+        "future ChromaDB-backed vector store"
+      ],
+      "OWNS": [
+        "deterministic text tokenization",
+        "local hashed embedding generation",
+        "cosine similarity scoring",
+        "chunk retrieval ranking",
+        "result limiting and score filtering"
+      ],
+      "DOES_NOT_OWN": [
+        "repository traversal",
+        "source chunking",
+        "metadata persistence",
+        "drift detection",
+        "ChromaDB persistence",
+        "LLM prompting",
+        "answer generation",
+        "API routing"
+      ],
+      "SIDE_EFFECTS": [
+        "none"
+      ],
+      "STATE": {
+        "reads": [
+          "in-memory source chunks"
+        ],
+        "writes": [
+          "in-memory source chunk vectors"
+        ]
+      },
+      "NOTES": [
+        "This is a dependency-free retrieval baseline for the MVP.",
+        "It gives us testable retrieval behavior before adding ChromaDB.",
+        "Later ChromaDB storage should preserve the same public search behavior."
+      ]
+    },
+    "imports": [
+      "__future__",
+      "code_context.models",
+      "collections.abc",
+      "hashlib",
+      "math",
+      "re"
+    ],
+    "internal_imports": [
+      "code_context.models"
+    ],
+    "classes": [
+      "LocalVectorStore"
+    ],
+    "functions": [
+      "search_chunks",
+      "embed_text",
+      "cosine_similarity",
+      "tokenize",
+      "_token_index",
+      "_normalize_vector"
+    ],
+    "warnings": []
+  },
+  {
     "path": "src/code_context/index_store.py",
     "role": "Persist and load local index snapshots containing scanned file metadata and source chunks.",
     "layer": "indexing",
@@ -437,20 +526,23 @@
         "source chunk boundaries",
         "source chunk content",
         "persisted index snapshot data",
-        "drift comparison results"
+        "drift comparison results",
+        "retrieval scores"
       ],
       "OUTPUTS": [
         "FileMetadata",
         "SourceChunk",
         "IndexSnapshot",
         "FileDrift",
-        "DriftReport"
+        "DriftReport",
+        "SearchResult"
       ],
       "UPSTREAM": [
         "repository scanner",
         "source chunker",
         "index store",
         "drift detector",
+        "vector store",
         "future parser modules",
         "future index loading workflows"
       ],
@@ -470,6 +562,7 @@
         "persisted index snapshot shape",
         "file drift result shape",
         "drift report shape",
+        "search result shape",
         "stable field names used between project modules"
       ],
       "DOES_NOT_OWN": [
@@ -479,6 +572,7 @@
         "chunk generation",
         "persistence writes",
         "drift comparison logic",
+        "retrieval scoring logic",
         "API routing"
       ],
       "SIDE_EFFECTS": [
@@ -508,7 +602,8 @@
       "SourceChunk",
       "IndexSnapshot",
       "FileDrift",
-      "DriftReport"
+      "DriftReport",
+      "SearchResult"
     ],
     "functions": [],
     "warnings": []
@@ -948,6 +1043,94 @@
       "test_scan_repository_allows_custom_supported_extensions",
       "test_calculate_file_hash_is_stable",
       "test_infer_language"
+    ],
+    "warnings": []
+  },
+  {
+    "path": "tests/test_vector_store.py",
+    "role": "Verify local vector-style retrieval over source chunks.",
+    "layer": "tests",
+    "flow": "vector_store_validation",
+    "header_fields": {
+      "ROLE": "Verify local vector-style retrieval over source chunks.",
+      "LAYER": "tests",
+      "FLOW": "vector_store_validation",
+      "INPUTS": [
+        "sample SourceChunk records",
+        "developer query text",
+        "search limit settings",
+        "score threshold settings"
+      ],
+      "OUTPUTS": [
+        "vector store behavior assertions"
+      ],
+      "UPSTREAM": [
+        "vector store implementation",
+        "SourceChunk model",
+        "SearchResult model"
+      ],
+      "DOWNSTREAM": [
+        "local test runs",
+        "future CI guardrails",
+        "retriever behavior",
+        "system map review"
+      ],
+      "OWNS": [
+        "local vector search tests",
+        "ranking behavior tests",
+        "tokenization tests",
+        "embedding stability tests",
+        "score threshold tests",
+        "validation tests"
+      ],
+      "DOES_NOT_OWN": [
+        "scanner tests",
+        "chunker tests",
+        "metadata store tests",
+        "drift detection tests",
+        "API tests",
+        "agent workflow tests"
+      ],
+      "SIDE_EFFECTS": [
+        "none"
+      ],
+      "STATE": {
+        "reads": [
+          "in-memory test chunks"
+        ],
+        "writes": [
+          "none"
+        ]
+      },
+      "NOTES": [
+        "These tests give us a retrieval baseline before adding ChromaDB.",
+        "The retrieval behavior should remain deterministic across runs."
+      ]
+    },
+    "imports": [
+      "__future__",
+      "code_context.models",
+      "code_context.vector_store",
+      "pytest"
+    ],
+    "internal_imports": [
+      "code_context.models",
+      "code_context.vector_store"
+    ],
+    "classes": [],
+    "functions": [
+      "test_local_vector_store_returns_best_matching_chunk_first",
+      "test_search_chunks_helper_builds_store_and_searches",
+      "test_local_vector_store_respects_limit",
+      "test_local_vector_store_respects_min_score",
+      "test_local_vector_store_returns_empty_for_empty_query",
+      "test_local_vector_store_clear_removes_chunks",
+      "test_tokenize_includes_snake_case_parts",
+      "test_embed_text_is_deterministic",
+      "test_cosine_similarity_rejects_mismatched_vector_lengths",
+      "test_vector_dimension_must_be_at_least_eight",
+      "test_search_limit_must_be_at_least_one",
+      "_chunk"
     ],
     "warnings": []
   }

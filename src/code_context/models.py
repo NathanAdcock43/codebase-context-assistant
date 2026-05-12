@@ -14,6 +14,7 @@ INPUTS:
 - source chunk content
 - persisted index snapshot data
 - drift comparison results
+- retrieval scores
 
 OUTPUTS:
 - FileMetadata
@@ -21,12 +22,14 @@ OUTPUTS:
 - IndexSnapshot
 - FileDrift
 - DriftReport
+- SearchResult
 
 UPSTREAM:
 - repository scanner
 - source chunker
 - index store
 - drift detector
+- vector store
 - future parser modules
 - future index loading workflows
 
@@ -46,6 +49,7 @@ OWNS:
 - persisted index snapshot shape
 - file drift result shape
 - drift report shape
+- search result shape
 - stable field names used between project modules
 
 DOES_NOT_OWN:
@@ -55,6 +59,7 @@ DOES_NOT_OWN:
 - chunk generation
 - persistence writes
 - drift comparison logic
+- retrieval scoring logic
 - API routing
 
 SIDE_EFFECTS:
@@ -120,3 +125,8 @@ class DriftReport(BaseModel):
     modified: list[FileDrift] = Field(default_factory=list)
     removed: list[FileDrift] = Field(default_factory=list)
     unchanged: list[FileDrift] = Field(default_factory=list)
+
+
+class SearchResult(BaseModel):
+    chunk: SourceChunk
+    score: float
