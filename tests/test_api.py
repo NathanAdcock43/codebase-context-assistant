@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 """
-ROLE: Verify FastAPI endpoints for health, indexing, search, retrieval, and drift detection.
+ROLE: Verify FastAPI endpoints for health, indexing, search, retrieval, ask, and drift detection.
 LAYER: tests
 FLOW: api_validation
 
@@ -10,6 +10,7 @@ INPUTS:
 - temporary index directories
 - HTTP request payloads
 - indexed source snapshots
+- deterministic ask questions
 
 OUTPUTS:
 - API response behavior assertions
@@ -20,6 +21,7 @@ UPSTREAM:
 - JSON index store
 - vector store
 - retrieval service
+- deterministic agent workflow runner
 - drift detector
 
 DOWNSTREAM:
@@ -35,6 +37,8 @@ OWNS:
 - endpoint integration tests
 - missing index HTTP behavior tests
 - retrieve endpoint sufficiency tests
+- ask endpoint grounded answer tests
+- ask endpoint refusal tests
 - drift endpoint tests
 
 DOES_NOT_OWN:
@@ -43,7 +47,7 @@ DOES_NOT_OWN:
 - standalone index store tests
 - standalone vector store tests
 - standalone retrieval service tests
-- agent workflow tests
+- standalone agent workflow tests
 - LLM response tests
 
 SIDE_EFFECTS:
@@ -60,7 +64,7 @@ STATE:
 
 NOTES:
 - These tests keep API endpoints thin and grounded in deterministic project behavior.
-- The API does not generate LLM answers yet.
+- The ask endpoint uses the deterministic agent workflow and does not generate LLM answers yet.
 """
 
 from pathlib import Path
@@ -264,6 +268,116 @@ def test_retrieve_endpoint_returns_404_when_index_is_missing(tmp_path: Path) -> 
         json={
             "index_dir": str(tmp_path / "missing_index"),
             "query": "hash",
+        },
+    )
+
+    assert response.status_code == 404
+    assert "Index file does not exist" in response.json()["detail"]
+
+
+def test_ask_endpoint_returns_grounded_answer_from_agent_workflow(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    scanner_file = repo / "scanner.py"
+    scanner_file.write_bytes(
+        b"def calculate_file_hash(path):\n"
+        b"    return hashlib.sha256(path.read_bytes()).hexdigest()\n"
+    )
+
+    index_dir = tmp_path / ".code_context_index"
+    client = TestClient(create_app())
+
+    index_response = client.post(
+        "/index",
+        json={
+            "repo_path": str(repo),
+            "index_dir": str(index_dir),
+            "max_lines": 10,
+            "overlap_lines": 0,
+        },
+    )
+    assert index_response.status_code == 200
+
+    ask_response = client.post(
+        "/ask",
+        json={
+            "index_dir": str(index_dir),
+            "question": "Where is calculate file hash handled?",
+            "limit": 1,
+        },
+    )
+
+    body = ask_response.json()
+
+    assert ask_response.status_code == 200
+    assert body["question"] == "Where is calculate file hash handled?"
+    assert body["confidence"] == "grounded"
+    assert body["is_grounded"] is True
+    assert body["insufficient_reason"] is None
+    assert body["answer"]
+    assert body["plan"]
+    assert any("scanner.py" in citation for citation in body["citations"])
+    assert body["sources"][0]["relative_path"] == "scanner.py"
+    assert body["sources"][0]["start_line"] == 1
+    assert body["sources"][0]["end_line"] == 2
+    assert [step["status"] for step in body["steps"]] == [
+        "completed",
+        "completed",
+        "completed",
+        "completed",
+    ]
+
+
+def test_ask_endpoint_refuses_when_context_is_insufficient(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    source_file = repo / "api.py"
+    source_file.write_bytes(b"def health():\n    return {'status': 'ok'}\n")
+
+    index_dir = tmp_path / ".code_context_index"
+    client = TestClient(create_app())
+
+    index_response = client.post(
+        "/index",
+        json={
+            "repo_path": str(repo),
+            "index_dir": str(index_dir),
+            "max_lines": 10,
+            "overlap_lines": 0,
+        },
+    )
+    assert index_response.status_code == 200
+
+    ask_response = client.post(
+        "/ask",
+        json={
+            "index_dir": str(index_dir),
+            "question": "Where is the postgres liquibase migration handled?",
+            "limit": 3,
+        },
+    )
+
+    body = ask_response.json()
+
+    assert ask_response.status_code == 200
+    assert body["confidence"] == "insufficient_context"
+    assert body["is_grounded"] is False
+    assert body["insufficient_reason"] == "Not enough relevant indexed context was found."
+    assert body["sources"] == []
+    assert body["citations"] == []
+    assert body["answer"]
+
+
+def test_ask_endpoint_returns_404_when_index_is_missing(tmp_path: Path) -> None:
+    client = TestClient(create_app())
+
+    response = client.post(
+        "/ask",
+        json={
+            "index_dir": str(tmp_path / "missing_index"),
+            "question": "Where is hash calculation handled?",
         },
     )
 

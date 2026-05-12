@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 """
-ROLE: Expose local codebase indexing, search, retrieval, and drift detection through FastAPI endpoints.
+ROLE: Expose local codebase indexing, search, retrieval, ask, and drift detection through FastAPI endpoints.
 LAYER: api
 FLOW: local_http_api
 
@@ -10,6 +10,7 @@ INPUTS:
 - repository indexing requests
 - indexed chunk search requests
 - grounded retrieval requests
+- deterministic ask requests
 - drift detection requests
 
 OUTPUTS:
@@ -17,6 +18,7 @@ OUTPUTS:
 - index summary responses
 - search result responses with grounded file and line references
 - retrieval responses with sufficiency decisions
+- ask responses with deterministic grounded answers or refusals
 - drift report responses
 
 UPSTREAM:
@@ -30,6 +32,7 @@ DOWNSTREAM:
 - JSON index store
 - repository scanner
 - retrieval service
+- deterministic agent workflow runner
 - drift detector
 - local vector store
 
@@ -39,6 +42,7 @@ OWNS:
 - endpoint orchestration
 - HTTP error handling for missing indexes
 - local API route definitions
+- API response shaping for deterministic ask results
 
 DOES_NOT_OWN:
 - repository traversal
@@ -48,13 +52,14 @@ DOES_NOT_OWN:
 - retrieval sufficiency logic
 - drift comparison logic
 - vector scoring logic
+- deterministic agent workflow behavior
 - LLM prompting
-- agent workflow behavior
 
 SIDE_EFFECTS:
 - /index reads repository files and writes a local JSON index
 - /search reads a local JSON index
 - /retrieve reads a local JSON index
+- /ask reads a local JSON index
 - /drift reads repository files and a local JSON index
 
 STATE:
@@ -66,18 +71,19 @@ STATE:
 
 NOTES:
 - Keep endpoints thin and delegate core behavior to existing modules.
-- This API exposes grounded context retrieval, not generated answers yet.
-- Agent and LLM behavior should be added after these deterministic routes are stable.
+- This API exposes deterministic grounded workflow answers, not LLM-generated answers yet.
+- LangGraph and LLM behavior should be added after these deterministic routes are stable.
 """
 
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
+from code_context.agent.graph import run_code_question_workflow
 from code_context.drift import detect_drift
 from code_context.index_store import DEFAULT_INDEX_FILENAME, JsonIndexStore
-from code_context.models import IndexSnapshot
+from code_context.models import IndexSnapshot, SearchResult
 from code_context.pipeline import index_repository
 from code_context.retrieval import (
     DEFAULT_MINIMUM_TOP_SCORE,
@@ -148,6 +154,43 @@ class RetrieveResponse(BaseModel):
     insufficient_reason: str | None
     result_count: int
     results: list[SearchResultResponse]
+
+
+class AskRequest(BaseModel):
+    index_dir: str
+    question: str = Field(min_length=1)
+    limit: int = Field(default=5, ge=1)
+    min_score: float = Field(default=DEFAULT_RETRIEVAL_MIN_SCORE, ge=0.0)
+    minimum_results: int = Field(default=1, ge=1)
+    minimum_top_score: float = Field(default=DEFAULT_MINIMUM_TOP_SCORE, ge=0.0)
+    index_filename: str = Field(default=DEFAULT_INDEX_FILENAME)
+
+
+class AskSourceResponse(BaseModel):
+    chunk_id: str
+    relative_path: str
+    start_line: int
+    end_line: int
+    language: str
+    score: float
+
+
+class AskStepResponse(BaseModel):
+    name: str
+    status: str
+    notes: list[str]
+
+
+class AskResponse(BaseModel):
+    question: str
+    answer: str
+    confidence: str
+    is_grounded: bool
+    insufficient_reason: str | None
+    plan: list[str]
+    citations: list[str]
+    sources: list[AskSourceResponse]
+    steps: list[AskStepResponse]
 
 
 class DriftRequest(BaseModel):
@@ -247,6 +290,52 @@ def create_app() -> FastAPI:
             results=response_results,
         )
 
+    @app.post("/ask", response_model=AskResponse)
+    def ask_question(request: AskRequest) -> AskResponse:
+        snapshot = _load_snapshot_or_404(
+            request.index_dir,
+            index_filename=request.index_filename,
+        )
+
+        try:
+            state = run_code_question_workflow(
+                question=request.question,
+                snapshot=snapshot,
+                limit=request.limit,
+                min_score=request.min_score,
+                minimum_results=request.minimum_results,
+                minimum_top_score=request.minimum_top_score,
+            )
+        except ValidationError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+        verification = state.verification
+        is_grounded = bool(verification and verification.can_answer and verification.is_grounded)
+        confidence = "grounded" if is_grounded else "insufficient_context"
+        insufficient_reason = None if is_grounded else verification.reason if verification else None
+        results = state.retrieval.results if state.retrieval else []
+
+        return AskResponse(
+            question=state.question,
+            answer=state.answer or "",
+            confidence=confidence,
+            is_grounded=is_grounded,
+            insufficient_reason=insufficient_reason,
+            plan=state.plan,
+            citations=state.citations,
+            sources=_to_ask_source_responses(results),
+            steps=[
+                AskStepResponse(
+                    name=step.name,
+                    status=step.status.value,
+                    notes=step.notes,
+                )
+                for step in state.steps
+            ],
+        )
+
     @app.post("/drift")
     def drift(request: DriftRequest) -> dict:
         snapshot = _load_snapshot_or_404(
@@ -276,7 +365,7 @@ def _load_snapshot_or_404(index_dir: str, *, index_filename: str) -> IndexSnapsh
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-def _to_search_result_responses(results: list) -> list[SearchResultResponse]:
+def _to_search_result_responses(results: list[SearchResult]) -> list[SearchResultResponse]:
     return [
         SearchResultResponse(
             chunk_id=result.chunk.chunk_id,
@@ -286,6 +375,20 @@ def _to_search_result_responses(results: list) -> list[SearchResultResponse]:
             language=result.chunk.language,
             score=result.score,
             content=result.chunk.content,
+        )
+        for result in results
+    ]
+
+
+def _to_ask_source_responses(results: list[SearchResult]) -> list[AskSourceResponse]:
+    return [
+        AskSourceResponse(
+            chunk_id=result.chunk.chunk_id,
+            relative_path=result.chunk.relative_path,
+            start_line=result.chunk.start_line,
+            end_line=result.chunk.end_line,
+            language=result.chunk.language,
+            score=result.score,
         )
         for result in results
     ]
