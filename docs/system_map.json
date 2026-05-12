@@ -181,6 +181,96 @@
     "warnings": []
   },
   {
+    "path": "src/code_context/pipeline.py",
+    "role": "Coordinate repository scanning, source chunking, and JSON index snapshot persistence.",
+    "layer": "indexing",
+    "flow": "repository_indexing_pipeline",
+    "header_fields": {
+      "ROLE": "Coordinate repository scanning, source chunking, and JSON index snapshot persistence.",
+      "LAYER": "indexing",
+      "FLOW": "repository_indexing_pipeline",
+      "INPUTS": [
+        "local repository path",
+        "local index directory",
+        "scanner settings",
+        "chunking settings",
+        "index filename"
+      ],
+      "OUTPUTS": [
+        "IndexSnapshot records",
+        "persisted JSON index snapshot"
+      ],
+      "UPSTREAM": [
+        "future CLI index command",
+        "future FastAPI index endpoint",
+        "local development workflow"
+      ],
+      "DOWNSTREAM": [
+        "index store",
+        "drift detector",
+        "vector store",
+        "future retriever",
+        "future API responses"
+      ],
+      "OWNS": [
+        "indexing pipeline orchestration",
+        "scan to chunk coordination",
+        "snapshot construction",
+        "snapshot persistence",
+        "repository-level indexing summary behavior"
+      ],
+      "DOES_NOT_OWN": [
+        "repository traversal rules",
+        "file hash calculation",
+        "chunk boundary logic",
+        "JSON serialization details",
+        "drift comparison",
+        "vector scoring",
+        "LLM prompting",
+        "API routing"
+      ],
+      "SIDE_EFFECTS": [
+        "reads repository files through scanner and chunker",
+        "writes JSON index snapshot through index store"
+      ],
+      "STATE": {
+        "reads": [
+          "local repository files"
+        ],
+        "writes": [
+          "local JSON index file"
+        ]
+      },
+      "NOTES": [
+        "This module wires existing deterministic pieces together.",
+        "Keep it small so FastAPI and CLI can call the same indexing behavior later.",
+        "Do not add AI behavior here."
+      ]
+    },
+    "imports": [
+      "__future__",
+      "code_context.chunker",
+      "code_context.index_store",
+      "code_context.models",
+      "code_context.scanner",
+      "pathlib",
+      "typing"
+    ],
+    "internal_imports": [
+      "code_context.chunker",
+      "code_context.index_store",
+      "code_context.models",
+      "code_context.scanner"
+    ],
+    "classes": [],
+    "functions": [
+      "index_repository",
+      "build_repository_snapshot",
+      "chunk_scanned_files"
+    ],
+    "warnings": []
+  },
+  {
     "path": "src/code_context/scanner.py",
     "role": "Scan a local repository and return structured file metadata for supported source files.",
     "layer": "scanner",
@@ -965,6 +1055,96 @@
       "test_save_and_load_index_snapshot_helpers_round_trip",
       "_sample_file_metadata",
       "_sample_source_chunk"
+    ],
+    "warnings": []
+  },
+  {
+    "path": "tests/test_pipeline.py",
+    "role": "Verify repository indexing pipeline behavior from scan to chunks to saved snapshot.",
+    "layer": "tests",
+    "flow": "indexing_pipeline_validation",
+    "header_fields": {
+      "ROLE": "Verify repository indexing pipeline behavior from scan to chunks to saved snapshot.",
+      "LAYER": "tests",
+      "FLOW": "indexing_pipeline_validation",
+      "INPUTS": [
+        "temporary repository directories",
+        "sample source files",
+        "ignored directory examples",
+        "chunking settings",
+        "temporary index directories"
+      ],
+      "OUTPUTS": [
+        "indexing pipeline behavior assertions"
+      ],
+      "UPSTREAM": [
+        "pipeline implementation",
+        "scanner implementation",
+        "chunker implementation",
+        "index store implementation",
+        "IndexSnapshot model"
+      ],
+      "DOWNSTREAM": [
+        "local test runs",
+        "future CI guardrails",
+        "future CLI index command",
+        "future FastAPI index endpoint",
+        "system map review"
+      ],
+      "OWNS": [
+        "repository indexing pipeline tests",
+        "scan to chunk integration tests",
+        "saved snapshot tests",
+        "ignored directory integration tests",
+        "custom extension integration tests"
+      ],
+      "DOES_NOT_OWN": [
+        "standalone scanner tests",
+        "standalone chunker tests",
+        "standalone metadata store tests",
+        "drift detection tests",
+        "vector store tests",
+        "API tests",
+        "agent workflow tests"
+      ],
+      "SIDE_EFFECTS": [
+        "writes temporary source files through pytest tmp_path",
+        "writes temporary JSON index files through pytest tmp_path"
+      ],
+      "STATE": {
+        "reads": [
+          "temporary repository files",
+          "temporary JSON index files"
+        ],
+        "writes": [
+          "temporary repository files",
+          "temporary JSON index files"
+        ]
+      },
+      "NOTES": [
+        "These tests prove the core local indexing workflow works before adding API endpoints.",
+        "Keep fixtures small so failures are easy to inspect."
+      ]
+    },
+    "imports": [
+      "__future__",
+      "code_context.index_store",
+      "code_context.pipeline",
+      "code_context.scanner",
+      "pathlib"
+    ],
+    "internal_imports": [
+      "code_context.index_store",
+      "code_context.pipeline",
+      "code_context.scanner"
+    ],
+    "classes": [],
+    "functions": [
+      "test_build_repository_snapshot_scans_and_chunks_supported_files",
+      "test_index_repository_saves_snapshot_to_json_store",
+      "test_index_repository_supports_custom_index_filename",
+      "test_build_repository_snapshot_supports_custom_extensions",
+      "test_chunk_scanned_files_uses_scanner_metadata"
     ],
     "warnings": []
   },
