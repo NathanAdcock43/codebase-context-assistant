@@ -263,6 +263,94 @@
     "warnings": []
   },
   {
+    "path": "src/code_context/drift.py",
+    "role": "Compare indexed file metadata against current file metadata and report stale context.",
+    "layer": "drift",
+    "flow": "drift_detection",
+    "header_fields": {
+      "ROLE": "Compare indexed file metadata against current file metadata and report stale context.",
+      "LAYER": "drift",
+      "FLOW": "drift_detection",
+      "INPUTS": [
+        "indexed FileMetadata records",
+        "current FileMetadata records",
+        "IndexSnapshot records"
+      ],
+      "OUTPUTS": [
+        "DriftReport records",
+        "FileDrift records grouped by added, modified, removed, and unchanged files"
+      ],
+      "UPSTREAM": [
+        "index store",
+        "repository scanner",
+        "future FastAPI drift endpoint",
+        "future indexing command"
+      ],
+      "DOWNSTREAM": [
+        "API response models",
+        "verifier",
+        "responder",
+        "developer-facing stale context warnings",
+        "future reindex decision logic"
+      ],
+      "OWNS": [
+        "file metadata comparison by relative path",
+        "added file detection",
+        "removed file detection",
+        "modified file detection using content hashes",
+        "unchanged file reporting",
+        "stale index determination"
+      ],
+      "DOES_NOT_OWN": [
+        "repository traversal",
+        "file hashing",
+        "source chunking",
+        "index persistence",
+        "vector storage",
+        "semantic retrieval",
+        "LLM prompting",
+        "API routing"
+      ],
+      "SIDE_EFFECTS": [
+        "none"
+      ],
+      "STATE": {
+        "reads": [
+          "indexed metadata passed by caller",
+          "current metadata passed by caller"
+        ],
+        "writes": [
+          "none"
+        ]
+      },
+      "NOTES": [
+        "Content hash differences are treated as stale context.",
+        "Modified timestamps are included in results for inspection, but timestamp-only changes do not make content stale.",
+        "Relative paths are normalized to forward slashes before comparison."
+      ]
+    },
+    "imports": [
+      "__future__",
+      "code_context.models",
+      "collections.abc"
+    ],
+    "internal_imports": [
+      "code_context.models"
+    ],
+    "classes": [],
+    "functions": [
+      "detect_drift",
+      "compare_file_metadata",
+      "_metadata_by_relative_path",
+      "_build_added_drift",
+      "_build_removed_drift",
+      "_build_modified_drift",
+      "_build_unchanged_drift",
+      "_normalize_relative_path"
+    ],
+    "warnings": []
+  },
+  {
     "path": "src/code_context/config.py",
     "role": "Define local configuration values for the codebase context assistant.",
     "layer": "config",
@@ -348,17 +436,21 @@
         "inferred language values",
         "source chunk boundaries",
         "source chunk content",
-        "persisted index snapshot data"
+        "persisted index snapshot data",
+        "drift comparison results"
       ],
       "OUTPUTS": [
         "FileMetadata",
         "SourceChunk",
-        "IndexSnapshot"
+        "IndexSnapshot",
+        "FileDrift",
+        "DriftReport"
       ],
       "UPSTREAM": [
         "repository scanner",
         "source chunker",
         "index store",
+        "drift detector",
         "future parser modules",
         "future index loading workflows"
       ],
@@ -376,6 +468,8 @@
         "file metadata shape",
         "source chunk shape",
         "persisted index snapshot shape",
+        "file drift result shape",
+        "drift report shape",
         "stable field names used between project modules"
       ],
       "DOES_NOT_OWN": [
@@ -384,6 +478,7 @@
         "source parsing",
         "chunk generation",
         "persistence writes",
+        "drift comparison logic",
         "API routing"
       ],
       "SIDE_EFFECTS": [
@@ -411,7 +506,9 @@
     "classes": [
       "FileMetadata",
       "SourceChunk",
-      "IndexSnapshot"
+      "IndexSnapshot",
+      "FileDrift",
+      "DriftReport"
     ],
     "functions": [],
     "warnings": []
@@ -602,6 +699,91 @@
       "test_chunk_file_reads_file_and_preserves_relative_path",
       "test_chunk_ids_are_stable_for_same_content",
       "test_chunk_ids_include_normalized_relative_path"
+    ],
+    "warnings": []
+  },
+  {
+    "path": "tests/test_drift.py",
+    "role": "Verify drift detection between indexed file metadata and current scanned file metadata.",
+    "layer": "tests",
+    "flow": "drift_validation",
+    "header_fields": {
+      "ROLE": "Verify drift detection between indexed file metadata and current scanned file metadata.",
+      "LAYER": "tests",
+      "FLOW": "drift_validation",
+      "INPUTS": [
+        "indexed FileMetadata records",
+        "current FileMetadata records",
+        "IndexSnapshot records"
+      ],
+      "OUTPUTS": [
+        "drift detection behavior assertions"
+      ],
+      "UPSTREAM": [
+        "drift implementation",
+        "FileMetadata model",
+        "IndexSnapshot model"
+      ],
+      "DOWNSTREAM": [
+        "local test runs",
+        "future CI guardrails",
+        "stale context API behavior",
+        "system map review"
+      ],
+      "OWNS": [
+        "added file drift tests",
+        "removed file drift tests",
+        "modified file drift tests",
+        "unchanged file tests",
+        "stale report tests",
+        "duplicate relative path tests"
+      ],
+      "DOES_NOT_OWN": [
+        "scanner tests",
+        "chunker tests",
+        "metadata store tests",
+        "vector store tests",
+        "API tests",
+        "agent workflow tests"
+      ],
+      "SIDE_EFFECTS": [
+        "none"
+      ],
+      "STATE": {
+        "reads": [
+          "in-memory test metadata"
+        ],
+        "writes": [
+          "none"
+        ]
+      },
+      "NOTES": [
+        "These tests protect the stale-context behavior needed before vector search or agent answers.",
+        "Timestamp-only changes are reported but do not make the index stale when content hashes match."
+      ]
+    },
+    "imports": [
+      "__future__",
+      "code_context.drift",
+      "code_context.models",
+      "pathlib",
+      "pytest"
+    ],
+    "internal_imports": [
+      "code_context.drift",
+      "code_context.models"
+    ],
+    "classes": [],
+    "functions": [
+      "test_compare_file_metadata_reports_unchanged_files",
+      "test_compare_file_metadata_reports_added_files",
+      "test_compare_file_metadata_reports_removed_files",
+      "test_compare_file_metadata_reports_modified_files",
+      "test_compare_file_metadata_reports_mixed_drift_in_sorted_order",
+      "test_detect_drift_uses_snapshot_files",
+      "test_compare_file_metadata_normalizes_windows_style_relative_paths",
+      "test_compare_file_metadata_rejects_duplicate_relative_paths",
+      "_file_metadata"
     ],
     "warnings": []
   },

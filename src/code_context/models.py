@@ -13,16 +13,20 @@ INPUTS:
 - source chunk boundaries
 - source chunk content
 - persisted index snapshot data
+- drift comparison results
 
 OUTPUTS:
 - FileMetadata
 - SourceChunk
 - IndexSnapshot
+- FileDrift
+- DriftReport
 
 UPSTREAM:
 - repository scanner
 - source chunker
 - index store
+- drift detector
 - future parser modules
 - future index loading workflows
 
@@ -40,6 +44,8 @@ OWNS:
 - file metadata shape
 - source chunk shape
 - persisted index snapshot shape
+- file drift result shape
+- drift report shape
 - stable field names used between project modules
 
 DOES_NOT_OWN:
@@ -48,6 +54,7 @@ DOES_NOT_OWN:
 - source parsing
 - chunk generation
 - persistence writes
+- drift comparison logic
 - API routing
 
 SIDE_EFFECTS:
@@ -94,3 +101,22 @@ class IndexSnapshot(BaseModel):
     indexed_at: float
     files: list[FileMetadata] = Field(default_factory=list)
     chunks: list[SourceChunk] = Field(default_factory=list)
+
+
+class FileDrift(BaseModel):
+    relative_path: str
+    status: str
+    indexed_hash: str | None = Field(default=None)
+    current_hash: str | None = Field(default=None)
+    indexed_modified_at: float | None = Field(default=None)
+    current_modified_at: float | None = Field(default=None)
+    indexed_size_bytes: int | None = Field(default=None)
+    current_size_bytes: int | None = Field(default=None)
+
+
+class DriftReport(BaseModel):
+    is_stale: bool
+    added: list[FileDrift] = Field(default_factory=list)
+    modified: list[FileDrift] = Field(default_factory=list)
+    removed: list[FileDrift] = Field(default_factory=list)
+    unchanged: list[FileDrift] = Field(default_factory=list)
