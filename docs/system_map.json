@@ -2158,13 +2158,13 @@
   },
   {
     "path": "tests/test_cli.py",
-    "role": "Verify local CLI ask command behavior.",
+    "role": "Verify local CLI index and ask command behavior.",
     "layer": "tests",
-    "flow": "cli_ask_validation",
+    "flow": "cli_validation",
     "header_fields": {
-      "ROLE": "Verify local CLI ask command behavior.",
+      "ROLE": "Verify local CLI index and ask command behavior.",
       "LAYER": "tests",
-      "FLOW": "cli_ask_validation",
+      "FLOW": "cli_validation",
       "INPUTS": [
         "temporary repository directories",
         "temporary source files",
@@ -2175,7 +2175,8 @@
       "OUTPUTS": [
         "CLI exit code assertions",
         "CLI stdout assertions",
-        "CLI stderr assertions"
+        "CLI stderr assertions",
+        "persisted index assertions"
       ],
       "UPSTREAM": [
         "CLI implementation",
@@ -2191,8 +2192,10 @@
         "system map review"
       ],
       "OWNS": [
+        "CLI index command tests",
         "CLI ask command tests",
         "terminal output formatting tests",
+        "missing repository error tests",
         "missing index error tests",
         "stale-index refusal output tests"
       ],
@@ -2206,7 +2209,7 @@
       ],
       "SIDE_EFFECTS": [
         "writes temporary source files through pytest tmp_path",
-        "writes temporary JSON index files through indexing pipeline",
+        "writes temporary JSON index files through CLI and indexing pipeline",
         "modifies temporary source files to make indexed context stale",
         "captures stdout and stderr through pytest"
       ],
@@ -2224,21 +2227,27 @@
       },
       "NOTES": [
         "These tests keep the CLI thin and focused on service wiring.",
-        "Stale-index refusal is a successful CLI execution because the tool refused correctly."
+        "Stale-index refusal is a successful CLI execution because the tool refused correctly.",
+        "The index command gives the project a simple terminal-first demo path."
       ]
     },
     "imports": [
       "__future__",
       "code_context",
+      "code_context.index_store",
       "code_context.pipeline",
       "pathlib"
     ],
     "internal_imports": [
       "code_context",
+      "code_context.index_store",
       "code_context.pipeline"
     ],
     "classes": [],
     "functions": [
+      "test_cli_index_creates_index_and_prints_summary",
+      "test_cli_index_supports_custom_index_filename",
+      "test_cli_index_returns_error_for_missing_repository",
       "test_cli_ask_prints_grounded_answer_for_existing_index",
       "test_cli_ask_prints_stale_refusal_without_error_exit",
       "test_cli_ask_returns_error_for_missing_index"
@@ -2966,13 +2975,16 @@
       "FLOW": "local_cli",
       "INPUTS": [
         "command-line arguments",
+        "local repository path",
         "local JSON index directory",
         "developer question text",
+        "indexing settings",
         "retrieval limit",
         "retrieval score thresholds",
         "retrieval sufficiency thresholds"
       ],
       "OUTPUTS": [
+        "plain-text indexing summaries for terminal users",
         "plain-text ask results for terminal users",
         "process exit codes for command success or operational failure"
       ],
@@ -2982,6 +2994,7 @@
         "future README examples"
       ],
       "DOWNSTREAM": [
+        "repository indexing pipeline",
         "JSON index store",
         "reusable ask workflow service",
         "optional LangGraph workflow adapter through ask service",
@@ -2995,7 +3008,9 @@
         "process exit code behavior"
       ],
       "DOES_NOT_OWN": [
-        "repository indexing pipeline",
+        "repository traversal rules",
+        "file hashing internals",
+        "source chunking internals",
         "JSON persistence internals",
         "stale-index detection",
         "retrieval scoring",
@@ -3005,15 +3020,18 @@
         "LLM prompting"
       ],
       "SIDE_EFFECTS": [
-        "reads a local JSON index file",
+        "index command reads repository files and writes a local JSON index file",
+        "ask command reads a local JSON index file",
         "writes terminal output",
         "writes terminal error output"
       ],
       "STATE": {
         "reads": [
+          "local repository files",
           "local JSON index file"
         ],
         "writes": [
+          "local JSON index file through index command",
           "terminal stdout",
           "terminal stderr"
         ]
@@ -3021,7 +3039,7 @@
       "NOTES": [
         "Keep CLI behavior thin and reuse application services.",
         "Stale-index and insufficient-context refusals are successful command executions because the tool behaved correctly.",
-        "Operational failures such as missing index files should return a non-zero exit code."
+        "Operational failures such as missing repository paths or missing index files should return a non-zero exit code."
       ]
     },
     "imports": [
@@ -3029,19 +3047,26 @@
       "argparse",
       "code_context.ask",
       "code_context.index_store",
+      "code_context.models",
+      "code_context.pipeline",
       "collections.abc",
+      "pathlib",
       "pydantic",
       "sys"
     ],
     "internal_imports": [
       "code_context.ask",
-      "code_context.index_store"
+      "code_context.index_store",
+      "code_context.models",
+      "code_context.pipeline"
     ],
     "classes": [],
     "functions": [
       "main",
       "build_parser",
+      "_run_index_command",
       "_run_ask_command",
+      "format_index_result",
       "format_ask_result",
       "_yes_no"
     ],

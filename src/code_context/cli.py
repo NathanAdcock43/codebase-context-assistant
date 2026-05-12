@@ -7,13 +7,16 @@ FLOW: local_cli
 
 INPUTS:
 - command-line arguments
+- local repository path
 - local JSON index directory
 - developer question text
+- indexing settings
 - retrieval limit
 - retrieval score thresholds
 - retrieval sufficiency thresholds
 
 OUTPUTS:
+- plain-text indexing summaries for terminal users
 - plain-text ask results for terminal users
 - process exit codes for command success or operational failure
 
@@ -23,6 +26,7 @@ UPSTREAM:
 - future README examples
 
 DOWNSTREAM:
+- repository indexing pipeline
 - JSON index store
 - reusable ask workflow service
 - optional LangGraph workflow adapter through ask service
@@ -36,7 +40,9 @@ OWNS:
 - process exit code behavior
 
 DOES_NOT_OWN:
-- repository indexing pipeline
+- repository traversal rules
+- file hashing internals
+- source chunking internals
 - JSON persistence internals
 - stale-index detection
 - retrieval scoring
@@ -46,37 +52,46 @@ DOES_NOT_OWN:
 - LLM prompting
 
 SIDE_EFFECTS:
-- reads a local JSON index file
+- index command reads repository files and writes a local JSON index file
+- ask command reads a local JSON index file
 - writes terminal output
 - writes terminal error output
 
 STATE:
   reads:
+    - local repository files
     - local JSON index file
   writes:
+    - local JSON index file through index command
     - terminal stdout
     - terminal stderr
 
 NOTES:
 - Keep CLI behavior thin and reuse application services.
 - Stale-index and insufficient-context refusals are successful command executions because the tool behaved correctly.
-- Operational failures such as missing index files should return a non-zero exit code.
+- Operational failures such as missing repository paths or missing index files should return a non-zero exit code.
 """
 
 import argparse
 import sys
 from collections.abc import Sequence
+from pathlib import Path
 
 from pydantic import ValidationError
 
 from code_context.ask import AskWorkflowResult, ask_indexed_code_question
 from code_context.index_store import DEFAULT_INDEX_FILENAME, JsonIndexStore
+from code_context.models import IndexSnapshot
+from code_context.pipeline import index_repository
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the local CLI."""
     parser = build_parser()
     args = parser.parse_args(argv)
+
+    if args.command == "index":
+        return _run_index_command(args)
 
     if args.command == "ask":
         return _run_ask_command(args)
@@ -93,6 +108,38 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     subparsers = parser.add_subparsers(dest="command", required=True)
+
+    index_parser = subparsers.add_parser(
+        "index",
+        help="Index a local repository into a JSON code context index.",
+    )
+    index_parser.add_argument(
+        "--repo",
+        required=True,
+        help="Repository directory to scan and index.",
+    )
+    index_parser.add_argument(
+        "--index-dir",
+        required=True,
+        help="Directory where the local JSON index should be written.",
+    )
+    index_parser.add_argument(
+        "--max-lines",
+        type=int,
+        default=80,
+        help="Maximum source lines per indexed chunk.",
+    )
+    index_parser.add_argument(
+        "--overlap-lines",
+        type=int,
+        default=10,
+        help="Number of overlapping source lines between chunks.",
+    )
+    index_parser.add_argument(
+        "--index-filename",
+        default=DEFAULT_INDEX_FILENAME,
+        help="Index filename inside the index directory.",
+    )
 
     ask_parser = subparsers.add_parser(
         "ask",
@@ -146,6 +193,24 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _run_index_command(args: argparse.Namespace) -> int:
+    try:
+        snapshot = index_repository(
+            Path(args.repo),
+            index_dir=Path(args.index_dir),
+            max_lines=args.max_lines,
+            overlap_lines=args.overlap_lines,
+            index_filename=args.index_filename,
+        )
+    except (FileNotFoundError, NotADirectoryError, ValidationError, ValueError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+
+    store = JsonIndexStore(args.index_dir, index_filename=args.index_filename)
+    print(format_index_result(snapshot, store.index_path), end="")
+    return 0
+
+
 def _run_ask_command(args: argparse.Namespace) -> int:
     store = JsonIndexStore(args.index_dir, index_filename=args.index_filename)
 
@@ -166,6 +231,21 @@ def _run_ask_command(args: argparse.Namespace) -> int:
 
     print(format_ask_result(result), end="")
     return 0
+
+
+def format_index_result(snapshot: IndexSnapshot, index_path: Path) -> str:
+    """Format an index result for terminal output."""
+    lines = [
+        "Indexed repository:",
+        snapshot.repo_root,
+        "",
+        f"Index path: {index_path}",
+        f"Indexed at: {snapshot.indexed_at}",
+        f"File count: {len(snapshot.files)}",
+        f"Chunk count: {len(snapshot.chunks)}",
+    ]
+
+    return "\n".join(lines).rstrip() + "\n"
 
 
 def format_ask_result(result: AskWorkflowResult) -> str:
