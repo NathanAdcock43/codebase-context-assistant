@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 """
-ROLE: Verify FastAPI endpoints for health, indexing, search, retrieval, ask, and drift detection.
+ROLE: Verify FastAPI endpoints for health, indexing, search, retrieval, ask, ask-time stale-index refusal, and drift detection.
 LAYER: tests
 FLOW: api_validation
 
@@ -11,6 +11,7 @@ INPUTS:
 - HTTP request payloads
 - indexed source snapshots
 - deterministic ask questions
+- modified files for ask-time stale-index checks
 
 OUTPUTS:
 - API response behavior assertions
@@ -38,7 +39,8 @@ OWNS:
 - missing index HTTP behavior tests
 - retrieve endpoint sufficiency tests
 - ask endpoint grounded answer tests
-- ask endpoint refusal tests
+- ask endpoint insufficient-context refusal tests
+- ask endpoint stale-index refusal tests
 - drift endpoint tests
 
 DOES_NOT_OWN:
@@ -53,6 +55,7 @@ DOES_NOT_OWN:
 SIDE_EFFECTS:
 - writes temporary source files through pytest tmp_path
 - writes temporary JSON index files through API calls
+- modifies temporary source files to test stale-index refusal
 
 STATE:
   reads:
@@ -65,6 +68,7 @@ STATE:
 NOTES:
 - These tests keep API endpoints thin and grounded in deterministic project behavior.
 - The ask endpoint uses the deterministic agent workflow and does not generate LLM answers yet.
+- Ask should refuse before running the workflow when indexed context is stale.
 """
 
 from pathlib import Path
@@ -314,6 +318,7 @@ def test_ask_endpoint_returns_grounded_answer_from_agent_workflow(tmp_path: Path
     assert body["question"] == "Where is calculate file hash handled?"
     assert body["confidence"] == "grounded"
     assert body["is_grounded"] is True
+    assert body["is_stale"] is False
     assert body["insufficient_reason"] is None
     assert body["answer"]
     assert body["plan"]
@@ -364,10 +369,65 @@ def test_ask_endpoint_refuses_when_context_is_insufficient(tmp_path: Path) -> No
     assert ask_response.status_code == 200
     assert body["confidence"] == "insufficient_context"
     assert body["is_grounded"] is False
+    assert body["is_stale"] is False
     assert body["insufficient_reason"] == "Not enough relevant indexed context was found."
     assert body["sources"] == []
     assert body["citations"] == []
     assert body["answer"]
+
+
+def test_ask_endpoint_refuses_when_index_is_stale(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    source_file = repo / "scanner.py"
+    source_file.write_bytes(
+        b"def calculate_file_hash(path):\n"
+        b"    return hashlib.sha256(path.read_bytes()).hexdigest()\n"
+    )
+
+    index_dir = tmp_path / ".code_context_index"
+    client = TestClient(create_app())
+
+    index_response = client.post(
+        "/index",
+        json={
+            "repo_path": str(repo),
+            "index_dir": str(index_dir),
+            "max_lines": 10,
+            "overlap_lines": 0,
+        },
+    )
+    assert index_response.status_code == 200
+
+    source_file.write_bytes(
+        b"def calculate_file_hash(path):\n"
+        b"    data = path.read_bytes()\n"
+        b"    return hashlib.sha256(data).hexdigest()\n"
+    )
+
+    ask_response = client.post(
+        "/ask",
+        json={
+            "index_dir": str(index_dir),
+            "question": "Where is calculate file hash handled?",
+            "limit": 1,
+        },
+    )
+
+    body = ask_response.json()
+
+    assert ask_response.status_code == 200
+    assert body["question"] == "Where is calculate file hash handled?"
+    assert body["confidence"] == "stale_index"
+    assert body["is_grounded"] is False
+    assert body["is_stale"] is True
+    assert body["insufficient_reason"] == "Indexed context is stale. Re-index the repository before asking questions."
+    assert body["plan"] == []
+    assert body["citations"] == []
+    assert body["sources"] == []
+    assert body["steps"] == []
+    assert "Re-index the repository" in body["answer"]
 
 
 def test_ask_endpoint_returns_404_when_index_is_missing(tmp_path: Path) -> None:

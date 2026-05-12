@@ -12,13 +12,14 @@ INPUTS:
 - grounded retrieval requests
 - deterministic ask requests
 - drift detection requests
+- current repository files for ask-time stale-index checks
 
 OUTPUTS:
 - health responses
 - index summary responses
 - search result responses with grounded file and line references
 - retrieval responses with sufficiency decisions
-- ask responses with deterministic grounded answers or refusals
+- ask responses with deterministic grounded answers, stale-index refusals, or insufficient-context refusals
 - drift report responses
 
 UPSTREAM:
@@ -43,6 +44,7 @@ OWNS:
 - HTTP error handling for missing indexes
 - local API route definitions
 - API response shaping for deterministic ask results
+- ask-time stale-index refusal before agent workflow execution
 
 DOES_NOT_OWN:
 - repository traversal
@@ -59,7 +61,7 @@ SIDE_EFFECTS:
 - /index reads repository files and writes a local JSON index
 - /search reads a local JSON index
 - /retrieve reads a local JSON index
-- /ask reads a local JSON index
+- /ask reads a local JSON index and repository files for stale-index detection
 - /drift reads repository files and a local JSON index
 
 STATE:
@@ -73,6 +75,7 @@ NOTES:
 - Keep endpoints thin and delegate core behavior to existing modules.
 - This API exposes deterministic grounded workflow answers, not LLM-generated answers yet.
 - LangGraph and LLM behavior should be added after these deterministic routes are stable.
+- Ask-time stale-index checks prevent the workflow from answering with outdated context.
 """
 
 from pathlib import Path
@@ -83,7 +86,7 @@ from pydantic import BaseModel, Field, ValidationError
 from code_context.agent.graph import run_code_question_workflow
 from code_context.drift import detect_drift
 from code_context.index_store import DEFAULT_INDEX_FILENAME, JsonIndexStore
-from code_context.models import IndexSnapshot, SearchResult
+from code_context.models import DriftReport, IndexSnapshot, SearchResult
 from code_context.pipeline import index_repository
 from code_context.retrieval import (
     DEFAULT_MINIMUM_TOP_SCORE,
@@ -92,6 +95,9 @@ from code_context.retrieval import (
 )
 from code_context.scanner import scan_repository
 from code_context.vector_store import search_chunks
+
+
+STALE_INDEX_REFUSAL = "Indexed context is stale. Re-index the repository before asking questions."
 
 
 class HealthResponse(BaseModel):
@@ -186,6 +192,7 @@ class AskResponse(BaseModel):
     answer: str
     confidence: str
     is_grounded: bool
+    is_stale: bool
     insufficient_reason: str | None
     plan: list[str]
     citations: list[str]
@@ -297,6 +304,11 @@ def create_app() -> FastAPI:
             index_filename=request.index_filename,
         )
 
+        drift_report = _detect_snapshot_drift(snapshot)
+
+        if drift_report.is_stale:
+            return _build_stale_ask_response(request.question)
+
         try:
             state = run_code_question_workflow(
                 question=request.question,
@@ -322,6 +334,7 @@ def create_app() -> FastAPI:
             answer=state.answer or "",
             confidence=confidence,
             is_grounded=is_grounded,
+            is_stale=False,
             insufficient_reason=insufficient_reason,
             plan=state.plan,
             citations=state.citations,
@@ -363,6 +376,35 @@ def _load_snapshot_or_404(index_dir: str, *, index_filename: str) -> IndexSnapsh
         return store.load()
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+def _detect_snapshot_drift(snapshot: IndexSnapshot) -> DriftReport:
+    try:
+        current_files = scan_repository(Path(snapshot.repo_root))
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except NotADirectoryError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return detect_drift(snapshot=snapshot, current_files=current_files)
+
+
+def _build_stale_ask_response(question: str) -> AskResponse:
+    return AskResponse(
+        question=question.strip(),
+        answer=(
+            "I cannot answer from this index because the indexed context is stale. "
+            "Re-index the repository and ask again."
+        ),
+        confidence="stale_index",
+        is_grounded=False,
+        is_stale=True,
+        insufficient_reason=STALE_INDEX_REFUSAL,
+        plan=[],
+        citations=[],
+        sources=[],
+        steps=[],
+    )
 
 
 def _to_search_result_responses(results: list[SearchResult]) -> list[SearchResultResponse]:
