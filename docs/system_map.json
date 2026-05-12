@@ -1,5 +1,97 @@
 [
   {
+    "path": "src/code_context/index_store.py",
+    "role": "Persist and load local index snapshots containing scanned file metadata and source chunks.",
+    "layer": "indexing",
+    "flow": "metadata_persistence",
+    "header_fields": {
+      "ROLE": "Persist and load local index snapshots containing scanned file metadata and source chunks.",
+      "LAYER": "indexing",
+      "FLOW": "metadata_persistence",
+      "INPUTS": [
+        "repository path",
+        "FileMetadata records",
+        "SourceChunk records",
+        "local index directory"
+      ],
+      "OUTPUTS": [
+        "persisted JSON index file",
+        "loaded IndexSnapshot records"
+      ],
+      "UPSTREAM": [
+        "repository scanner",
+        "source chunker",
+        "future indexing command",
+        "future FastAPI index endpoint"
+      ],
+      "DOWNSTREAM": [
+        "drift detector",
+        "vector indexing",
+        "retriever",
+        "verifier",
+        "API response models"
+      ],
+      "OWNS": [
+        "local JSON index snapshot persistence",
+        "index directory creation",
+        "index file path conventions",
+        "IndexSnapshot serialization",
+        "IndexSnapshot loading"
+      ],
+      "DOES_NOT_OWN": [
+        "repository traversal",
+        "file hashing",
+        "source chunking",
+        "drift comparison",
+        "vector embedding",
+        "semantic retrieval",
+        "LLM prompting",
+        "API routing"
+      ],
+      "SIDE_EFFECTS": [
+        "creates index directory when saving",
+        "writes JSON index snapshots",
+        "reads JSON index snapshots",
+        "deletes local index file when requested"
+      ],
+      "STATE": {
+        "reads": [
+          "local JSON index file"
+        ],
+        "writes": [
+          "local JSON index file"
+        ]
+      },
+      "NOTES": [
+        "Keep persistence JSON-based for the MVP.",
+        "This gives drift detection a stable stored baseline before adding vector search.",
+        "Read with utf-8-sig tolerance so a BOM does not break local recovery."
+      ]
+    },
+    "imports": [
+      "__future__",
+      "code_context.models",
+      "pathlib",
+      "pydantic",
+      "time",
+      "typing"
+    ],
+    "internal_imports": [
+      "code_context.models"
+    ],
+    "classes": [
+      "JsonIndexStore"
+    ],
+    "functions": [
+      "build_index_snapshot",
+      "save_index_snapshot",
+      "load_index_snapshot",
+      "_dump_model_json",
+      "_validate_model_json"
+    ],
+    "warnings": []
+  },
+  {
     "path": "src/code_context/scanner.py",
     "role": "Scan a local repository and return structured file metadata for supported source files.",
     "layer": "scanner",
@@ -255,15 +347,18 @@
         "calculated content hashes",
         "inferred language values",
         "source chunk boundaries",
-        "source chunk content"
+        "source chunk content",
+        "persisted index snapshot data"
       ],
       "OUTPUTS": [
         "FileMetadata",
-        "SourceChunk"
+        "SourceChunk",
+        "IndexSnapshot"
       ],
       "UPSTREAM": [
         "repository scanner",
         "source chunker",
+        "index store",
         "future parser modules",
         "future index loading workflows"
       ],
@@ -280,6 +375,7 @@
         "shared DTO definitions",
         "file metadata shape",
         "source chunk shape",
+        "persisted index snapshot shape",
         "stable field names used between project modules"
       ],
       "DOES_NOT_OWN": [
@@ -314,7 +410,8 @@
     "internal_imports": [],
     "classes": [
       "FileMetadata",
-      "SourceChunk"
+      "SourceChunk",
+      "IndexSnapshot"
     ],
     "functions": [],
     "warnings": []
@@ -505,6 +602,92 @@
       "test_chunk_file_reads_file_and_preserves_relative_path",
       "test_chunk_ids_are_stable_for_same_content",
       "test_chunk_ids_include_normalized_relative_path"
+    ],
+    "warnings": []
+  },
+  {
+    "path": "tests/test_index_store.py",
+    "role": "Verify JSON index persistence for file metadata, source chunks, and index snapshots.",
+    "layer": "tests",
+    "flow": "index_store_validation",
+    "header_fields": {
+      "ROLE": "Verify JSON index persistence for file metadata, source chunks, and index snapshots.",
+      "LAYER": "tests",
+      "FLOW": "index_store_validation",
+      "INPUTS": [
+        "temporary index directories",
+        "sample FileMetadata records",
+        "sample SourceChunk records",
+        "sample IndexSnapshot records"
+      ],
+      "OUTPUTS": [
+        "index store behavior assertions"
+      ],
+      "UPSTREAM": [
+        "index store implementation",
+        "FileMetadata model",
+        "SourceChunk model",
+        "IndexSnapshot model"
+      ],
+      "DOWNSTREAM": [
+        "local test runs",
+        "future CI guardrails",
+        "drift detection baseline",
+        "system map review"
+      ],
+      "OWNS": [
+        "JSON index store tests",
+        "snapshot round-trip tests",
+        "missing index behavior tests",
+        "index existence tests",
+        "delete behavior tests"
+      ],
+      "DOES_NOT_OWN": [
+        "scanner tests",
+        "chunker tests",
+        "drift detection tests",
+        "vector store tests",
+        "API tests",
+        "agent workflow tests"
+      ],
+      "SIDE_EFFECTS": [
+        "writes temporary JSON index files through pytest tmp_path",
+        "deletes temporary JSON index files through pytest tmp_path"
+      ],
+      "STATE": {
+        "reads": [
+          "temporary JSON index files"
+        ],
+        "writes": [
+          "temporary JSON index files"
+        ]
+      },
+      "NOTES": [
+        "These tests keep persistence simple before drift detection.",
+        "The stored snapshot becomes the comparison baseline for the next slice."
+      ]
+    },
+    "imports": [
+      "__future__",
+      "code_context.index_store",
+      "code_context.models",
+      "pathlib",
+      "pytest"
+    ],
+    "internal_imports": [
+      "code_context.index_store",
+      "code_context.models"
+    ],
+    "classes": [],
+    "functions": [
+      "test_build_index_snapshot_collects_files_and_chunks",
+      "test_json_index_store_saves_and_loads_snapshot",
+      "test_json_index_store_exists_returns_false_then_true",
+      "test_json_index_store_load_missing_file_raises",
+      "test_json_index_store_delete_removes_index_file",
+      "test_save_and_load_index_snapshot_helpers_round_trip",
+      "_sample_file_metadata",
+      "_sample_source_chunk"
     ],
     "warnings": []
   },

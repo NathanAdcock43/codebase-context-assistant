@@ -12,14 +12,17 @@ INPUTS:
 - inferred language values
 - source chunk boundaries
 - source chunk content
+- persisted index snapshot data
 
 OUTPUTS:
 - FileMetadata
 - SourceChunk
+- IndexSnapshot
 
 UPSTREAM:
 - repository scanner
 - source chunker
+- index store
 - future parser modules
 - future index loading workflows
 
@@ -36,6 +39,7 @@ OWNS:
 - shared DTO definitions
 - file metadata shape
 - source chunk shape
+- persisted index snapshot shape
 - stable field names used between project modules
 
 DOES_NOT_OWN:
@@ -82,3 +86,11 @@ class SourceChunk(BaseModel):
     end_line: int
     content: str
     language: str = Field(default="unknown")
+
+
+class IndexSnapshot(BaseModel):
+    schema_version: int = Field(default=1)
+    repo_root: str
+    indexed_at: float
+    files: list[FileMetadata] = Field(default_factory=list)
+    chunks: list[SourceChunk] = Field(default_factory=list)
