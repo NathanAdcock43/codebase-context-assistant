@@ -13,7 +13,7 @@
         "repository indexing requests",
         "indexed chunk search requests",
         "grounded retrieval requests",
-        "deterministic ask requests",
+        "ask requests routed through the optional LangGraph workflow adapter",
         "drift detection requests",
         "current repository files for ask-time stale-index checks"
       ],
@@ -22,7 +22,7 @@
         "index summary responses",
         "search result responses with grounded file and line references",
         "retrieval responses with sufficiency decisions",
-        "ask responses with deterministic grounded answers, stale-index refusals, or insufficient-context refusals",
+        "ask responses with grounded answers, stale-index refusals, or insufficient-context refusals",
         "drift report responses"
       ],
       "UPSTREAM": [
@@ -36,7 +36,8 @@
         "JSON index store",
         "repository scanner",
         "retrieval service",
-        "deterministic agent workflow runner",
+        "optional LangGraph workflow adapter",
+        "deterministic agent workflow fallback",
         "drift detector",
         "local vector store"
       ],
@@ -46,7 +47,7 @@
         "endpoint orchestration",
         "HTTP error handling for missing indexes",
         "local API route definitions",
-        "API response shaping for deterministic ask results",
+        "API response shaping for ask results",
         "ask-time stale-index refusal before agent workflow execution"
       ],
       "DOES_NOT_OWN": [
@@ -57,6 +58,7 @@
         "retrieval sufficiency logic",
         "drift comparison logic",
         "vector scoring logic",
+        "optional LangGraph workflow behavior",
         "deterministic agent workflow behavior",
         "LLM prompting"
       ],
@@ -78,14 +80,14 @@
       },
       "NOTES": [
         "Keep endpoints thin and delegate core behavior to existing modules.",
-        "This API exposes deterministic grounded workflow answers, not LLM-generated answers yet.",
-        "LangGraph and LLM behavior should be added after these deterministic routes are stable.",
+        "Ask uses the optional LangGraph adapter, which falls back to the deterministic workflow when LangGraph is unavailable.",
+        "This API still exposes grounded workflow answers, not LLM-generated answers yet.",
         "Ask-time stale-index checks prevent the workflow from answering with outdated context."
       ]
     },
     "imports": [
       "__future__",
-      "code_context.agent.graph",
+      "code_context.agent.langgraph_graph",
       "code_context.drift",
       "code_context.index_store",
       "code_context.models",
@@ -98,7 +100,7 @@
       "pydantic"
     ],
     "internal_imports": [
-      "code_context.agent.graph",
+      "code_context.agent.langgraph_graph",
       "code_context.drift",
       "code_context.index_store",
       "code_context.models",
@@ -1890,6 +1892,91 @@
     "functions": [
       "test_ask_flow_refuses_stale_index_then_recovers_after_reindex",
       "test_drift_and_ask_agree_when_index_is_stale"
+    ],
+    "warnings": []
+  },
+  {
+    "path": "tests/test_api_langgraph_routing.py",
+    "role": "Verify that the ask API route uses the optional LangGraph workflow adapter.",
+    "layer": "tests",
+    "flow": "api_langgraph_routing_validation",
+    "header_fields": {
+      "ROLE": "Verify that the ask API route uses the optional LangGraph workflow adapter.",
+      "LAYER": "tests",
+      "FLOW": "api_langgraph_routing_validation",
+      "INPUTS": [
+        "temporary repository directories",
+        "temporary source files",
+        "temporary index directories",
+        "HTTP index requests",
+        "HTTP ask requests",
+        "monkeypatched optional LangGraph workflow adapter"
+      ],
+      "OUTPUTS": [
+        "API routing behavior assertions for ask workflow execution"
+      ],
+      "UPSTREAM": [
+        "FastAPI app implementation",
+        "optional LangGraph workflow adapter",
+        "agent state models",
+        "indexing pipeline",
+        "JSON index store"
+      ],
+      "DOWNSTREAM": [
+        "local test runs",
+        "future CI guardrails",
+        "future LangGraph ask endpoint integration",
+        "future demo scripts",
+        "system map review"
+      ],
+      "OWNS": [
+        "ask endpoint workflow routing tests",
+        "optional LangGraph adapter invocation tests",
+        "API to agent adapter boundary tests"
+      ],
+      "DOES_NOT_OWN": [
+        "standalone LangGraph adapter tests",
+        "deterministic agent workflow tests",
+        "retrieval service unit tests",
+        "drift endpoint tests",
+        "LLM response tests"
+      ],
+      "SIDE_EFFECTS": [
+        "writes temporary source files through pytest tmp_path",
+        "writes temporary JSON index files through API calls",
+        "monkeypatches the API workflow adapter during the test"
+      ],
+      "STATE": {
+        "reads": [
+          "temporary repository files",
+          "temporary JSON index files"
+        ],
+        "writes": [
+          "temporary repository files",
+          "temporary JSON index files"
+        ]
+      },
+      "NOTES": [
+        "This test protects the seam between the API and the optional LangGraph adapter.",
+        "The adapter itself still owns fallback behavior when LangGraph is unavailable."
+      ]
+    },
+    "imports": [
+      "__future__",
+      "code_context.agent.state",
+      "code_context.api",
+      "code_context.models",
+      "fastapi.testclient",
+      "pathlib"
+    ],
+    "internal_imports": [
+      "code_context.agent.state",
+      "code_context.api",
+      "code_context.models"
+    ],
+    "classes": [],
+    "functions": [
+      "test_ask_endpoint_routes_through_optional_langgraph_adapter"
     ],
     "warnings": []
   },

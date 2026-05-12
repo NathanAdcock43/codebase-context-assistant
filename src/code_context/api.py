@@ -10,7 +10,7 @@ INPUTS:
 - repository indexing requests
 - indexed chunk search requests
 - grounded retrieval requests
-- deterministic ask requests
+- ask requests routed through the optional LangGraph workflow adapter
 - drift detection requests
 - current repository files for ask-time stale-index checks
 
@@ -19,7 +19,7 @@ OUTPUTS:
 - index summary responses
 - search result responses with grounded file and line references
 - retrieval responses with sufficiency decisions
-- ask responses with deterministic grounded answers, stale-index refusals, or insufficient-context refusals
+- ask responses with grounded answers, stale-index refusals, or insufficient-context refusals
 - drift report responses
 
 UPSTREAM:
@@ -33,7 +33,8 @@ DOWNSTREAM:
 - JSON index store
 - repository scanner
 - retrieval service
-- deterministic agent workflow runner
+- optional LangGraph workflow adapter
+- deterministic agent workflow fallback
 - drift detector
 - local vector store
 
@@ -43,7 +44,7 @@ OWNS:
 - endpoint orchestration
 - HTTP error handling for missing indexes
 - local API route definitions
-- API response shaping for deterministic ask results
+- API response shaping for ask results
 - ask-time stale-index refusal before agent workflow execution
 
 DOES_NOT_OWN:
@@ -54,6 +55,7 @@ DOES_NOT_OWN:
 - retrieval sufficiency logic
 - drift comparison logic
 - vector scoring logic
+- optional LangGraph workflow behavior
 - deterministic agent workflow behavior
 - LLM prompting
 
@@ -73,8 +75,8 @@ STATE:
 
 NOTES:
 - Keep endpoints thin and delegate core behavior to existing modules.
-- This API exposes deterministic grounded workflow answers, not LLM-generated answers yet.
-- LangGraph and LLM behavior should be added after these deterministic routes are stable.
+- Ask uses the optional LangGraph adapter, which falls back to the deterministic workflow when LangGraph is unavailable.
+- This API still exposes grounded workflow answers, not LLM-generated answers yet.
 - Ask-time stale-index checks prevent the workflow from answering with outdated context.
 """
 
@@ -83,7 +85,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field, ValidationError
 
-from code_context.agent.graph import run_code_question_workflow
+from code_context.agent.langgraph_graph import run_code_question_workflow_with_optional_langgraph
 from code_context.drift import detect_drift
 from code_context.index_store import DEFAULT_INDEX_FILENAME, JsonIndexStore
 from code_context.models import DriftReport, IndexSnapshot, SearchResult
@@ -310,13 +312,14 @@ def create_app() -> FastAPI:
             return _build_stale_ask_response(request.question)
 
         try:
-            state = run_code_question_workflow(
+            state = run_code_question_workflow_with_optional_langgraph(
                 question=request.question,
                 snapshot=snapshot,
                 limit=request.limit,
                 min_score=request.min_score,
                 minimum_results=request.minimum_results,
                 minimum_top_score=request.minimum_top_score,
+                prefer_langgraph=True,
             )
         except ValidationError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
