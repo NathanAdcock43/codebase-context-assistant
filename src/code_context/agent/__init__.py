@@ -28,7 +28,7 @@ OWNS:
 DOES_NOT_OWN:
 - retrieval sufficiency logic
 - verification decision internals
-- response generation
+- response generation internals
 - LangGraph wiring
 - API routing
 
@@ -47,6 +47,7 @@ NOTES:
 
 from code_context.agent.nodes import (
     plan_question,
+    respond_to_question,
     retrieve_context_for_question,
     verify_retrieval_for_answer,
 )
@@ -66,6 +67,7 @@ __all__ = [
     "VerificationResult",
     "create_initial_state",
     "plan_question",
+    "respond_to_question",
     "retrieve_context_for_question",
     "update_step_status",
     "verify_retrieval_for_answer",

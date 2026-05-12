@@ -130,14 +130,17 @@
         "existing agent step status records",
         "IndexSnapshot records",
         "retrieval thresholds",
-        "grounded retrieval responses"
+        "grounded retrieval responses",
+        "verification results"
       ],
       "OUTPUTS": [
         "updated CodeQuestionState records",
         "deterministic plan steps",
         "grounded retrieval responses attached to state",
         "verification results attached to state",
-        "updated planner, retriever, and verifier step statuses"
+        "grounded or refused answer text attached to state",
+        "grounded citation strings attached to state",
+        "updated planner, retriever, verifier, and responder step statuses"
       ],
       "UPSTREAM": [
         "future LangGraph graph",
@@ -147,8 +150,8 @@
       "DOWNSTREAM": [
         "agent state models",
         "retrieval service",
-        "future responder node",
-        "future LangGraph workflow"
+        "future LangGraph workflow",
+        "future API ask response models"
       ],
       "OWNS": [
         "deterministic planner node behavior",
@@ -159,13 +162,16 @@
         "retriever step status updates",
         "verifier node behavior",
         "verification result attachment to agent state",
-        "verifier step status updates"
+        "verifier step status updates",
+        "deterministic responder node behavior",
+        "grounded citation construction",
+        "refusal response construction"
       ],
       "DOES_NOT_OWN": [
         "retrieval sufficiency checks",
         "vector scoring implementation",
-        "response generation",
         "LLM prompting",
+        "generated natural-language synthesis",
         "LangGraph edge definitions",
         "API routing"
       ],
@@ -186,6 +192,7 @@
         "The planner should produce an explainable plan, not a generated answer.",
         "The retriever should attach grounded context, not decide the final answer.",
         "The verifier should make a grounded sufficiency decision, not generate the final answer.",
+        "The responder should refuse when verification fails or has not run.",
         "Future nodes should preserve the same state-copying style."
       ]
     },
@@ -205,7 +212,12 @@
       "plan_question",
       "retrieve_context_for_question",
       "verify_retrieval_for_answer",
-      "_build_verification_result"
+      "respond_to_question",
+      "_build_verification_result",
+      "_build_response_parts",
+      "_build_grounded_response",
+      "_build_citations",
+      "_format_source_reference"
     ],
     "warnings": []
   },
@@ -1218,7 +1230,8 @@
         "existing agent steps",
         "sample IndexSnapshot records",
         "sample SourceChunk records",
-        "sample retrieval responses"
+        "sample retrieval responses",
+        "sample verification results"
       ],
       "OUTPUTS": [
         "agent node behavior assertions"
@@ -1229,7 +1242,8 @@
         "retrieval service",
         "IndexSnapshot model",
         "SourceChunk model",
-        "RetrievalResponse model"
+        "RetrievalResponse model",
+        "VerificationResult model"
       ],
       "DOWNSTREAM": [
         "local test runs",
@@ -1242,15 +1256,16 @@
         "planner node tests",
         "retriever node tests",
         "verifier node tests",
+        "responder node tests",
         "deterministic plan tests",
         "planner step status tests",
         "retriever step status tests",
         "verifier step status tests",
+        "responder step status tests",
         "state copy behavior tests"
       ],
       "DOES_NOT_OWN": [
         "agent state model tests",
-        "responder node tests",
         "LangGraph integration tests",
         "LLM answer tests"
       ],
@@ -1303,9 +1318,17 @@
       "test_verify_retrieval_for_answer_rejects_sufficient_retrieval_without_results",
       "test_verify_retrieval_for_answer_returns_copy_without_mutating_original_state",
       "test_verify_retrieval_for_answer_requires_verifier_step_to_exist",
+      "test_respond_to_question_creates_grounded_answer_with_citations",
+      "test_respond_to_question_deduplicates_citations",
+      "test_respond_to_question_refuses_when_verification_has_not_run",
+      "test_respond_to_question_refuses_when_verification_failed",
+      "test_respond_to_question_refuses_when_results_are_missing_despite_verification",
+      "test_respond_to_question_returns_copy_without_mutating_original_state",
+      "test_respond_to_question_requires_responder_step_to_exist",
+      "_verified_answerable_state",
       "_snapshot",
       "_chunk",
-      "_search_result_chunk"
+      "_search_result"
     ],
     "warnings": []
   },

@@ -12,6 +12,7 @@ INPUTS:
 - sample IndexSnapshot records
 - sample SourceChunk records
 - sample retrieval responses
+- sample verification results
 
 OUTPUTS:
 - agent node behavior assertions
@@ -23,6 +24,7 @@ UPSTREAM:
 - IndexSnapshot model
 - SourceChunk model
 - RetrievalResponse model
+- VerificationResult model
 
 DOWNSTREAM:
 - local test runs
@@ -35,15 +37,16 @@ OWNS:
 - planner node tests
 - retriever node tests
 - verifier node tests
+- responder node tests
 - deterministic plan tests
 - planner step status tests
 - retriever step status tests
 - verifier step status tests
+- responder step status tests
 - state copy behavior tests
 
 DOES_NOT_OWN:
 - agent state model tests
-- responder node tests
 - LangGraph integration tests
 - LLM answer tests
 
@@ -66,15 +69,17 @@ import pytest
 
 from code_context.agent import (
     AgentStepStatus,
+    VerificationResult,
     create_initial_state,
     plan_question,
+    respond_to_question,
     retrieve_context_for_question,
     verify_retrieval_for_answer,
 )
 from code_context.agent.nodes import DEFAULT_CODE_QUESTION_PLAN
 from code_context.agent.state import AgentStep, CodeQuestionState
 from code_context.index_store import build_index_snapshot
-from code_context.models import IndexSnapshot, RetrievalResponse, SourceChunk
+from code_context.models import IndexSnapshot, RetrievalResponse, SearchResult, SourceChunk
 
 
 def test_plan_question_adds_default_plan_and_completes_planner_step() -> None:
@@ -215,7 +220,7 @@ def test_verify_retrieval_for_answer_marks_sufficient_retrieval_as_answerable() 
                 is_sufficient=True,
                 insufficient_reason=None,
                 results=[
-                    _search_result_chunk(
+                    _search_result(
                         content="def calculate_file_hash(path):\n    return hashlib.sha256(data).hexdigest()\n",
                         relative_path="src/scanner.py",
                     )
@@ -319,6 +324,151 @@ def test_verify_retrieval_for_answer_requires_verifier_step_to_exist() -> None:
         verify_retrieval_for_answer(state)
 
 
+def test_respond_to_question_creates_grounded_answer_with_citations() -> None:
+    state = _verified_answerable_state()
+
+    responded = respond_to_question(state)
+
+    assert responded.answer is not None
+    assert "I found grounded indexed context for this question." in responded.answer
+    assert "src/scanner.py:1-2" in responded.answer
+    assert responded.citations == ["src/scanner.py:1-2"]
+    assert responded.steps[3].name == "responder"
+    assert responded.steps[3].status == AgentStepStatus.completed
+    assert responded.steps[3].notes == ["Created grounded response with 1 citation(s)."]
+
+
+def test_respond_to_question_deduplicates_citations() -> None:
+    state = _verified_answerable_state(
+        results=[
+            _search_result(content="hash one", relative_path="src/scanner.py"),
+            _search_result(content="hash two", relative_path="src/scanner.py"),
+        ]
+    )
+
+    responded = respond_to_question(state)
+
+    assert responded.citations == ["src/scanner.py:1-1"]
+
+
+def test_respond_to_question_refuses_when_verification_has_not_run() -> None:
+    state = create_initial_state("How does retrieval work?")
+
+    responded = respond_to_question(state)
+
+    assert responded.answer == "I cannot answer because verification has not run."
+    assert responded.citations == []
+    assert responded.steps[3].status == AgentStepStatus.completed
+    assert responded.steps[3].notes == ["Refused because verification has not run."]
+
+
+def test_respond_to_question_refuses_when_verification_failed() -> None:
+    state = create_initial_state("How does migration work?")
+    state_with_verification = state.model_copy(
+        update={
+            "verification": VerificationResult(
+                can_answer=False,
+                is_grounded=False,
+                reason="Not enough relevant indexed context was found.",
+            )
+        }
+    )
+
+    responded = respond_to_question(state_with_verification)
+
+    assert (
+        responded.answer
+        == "I do not have enough grounded indexed context to answer that. "
+        "Reason: Not enough relevant indexed context was found."
+    )
+    assert responded.citations == []
+    assert responded.steps[3].notes == [
+        "Refused because verification failed: Not enough relevant indexed context was found."
+    ]
+
+
+def test_respond_to_question_refuses_when_results_are_missing_despite_verification() -> None:
+    state = create_initial_state("How does retrieval work?")
+    state_with_verification = state.model_copy(
+        update={
+            "verification": VerificationResult(
+                can_answer=True,
+                is_grounded=True,
+                reason=None,
+            )
+        }
+    )
+
+    responded = respond_to_question(state_with_verification)
+
+    assert (
+        responded.answer
+        == "I do not have enough grounded indexed context to answer that. "
+        "Reason: No grounded retrieval results are available."
+    )
+    assert responded.citations == []
+    assert responded.steps[3].notes == [
+        "Refused because verification failed: No grounded retrieval results are available."
+    ]
+
+
+def test_respond_to_question_returns_copy_without_mutating_original_state() -> None:
+    state = _verified_answerable_state()
+
+    responded = respond_to_question(state)
+
+    assert state.answer is None
+    assert state.citations == []
+    assert state.steps[3].status == AgentStepStatus.pending
+    assert responded.answer is not None
+    assert responded.citations == ["src/scanner.py:1-2"]
+    assert responded.steps[3].status == AgentStepStatus.completed
+
+
+def test_respond_to_question_requires_responder_step_to_exist() -> None:
+    state = CodeQuestionState(
+        question="How does retrieval work?",
+        steps=[
+            AgentStep(name="planner"),
+            AgentStep(name="retriever"),
+            AgentStep(name="verifier"),
+        ],
+    )
+
+    with pytest.raises(ValueError, match="Unknown agent step"):
+        respond_to_question(state)
+
+
+def _verified_answerable_state(
+    *,
+    results: list[SearchResult] | None = None,
+) -> CodeQuestionState:
+    retrieval_results = results or [
+        _search_result(
+            content="def calculate_file_hash(path):\n    return hashlib.sha256(data).hexdigest()\n",
+            relative_path="src/scanner.py",
+            end_line=2,
+        )
+    ]
+
+    state = create_initial_state("How does calculate file hash work?")
+    return state.model_copy(
+        update={
+            "retrieval": RetrievalResponse(
+                query="How does calculate file hash work?",
+                is_sufficient=True,
+                insufficient_reason=None,
+                results=retrieval_results,
+            ),
+            "verification": VerificationResult(
+                can_answer=True,
+                is_grounded=True,
+                reason=None,
+            ),
+        }
+    )
+
+
 def _snapshot(*, chunks: list[SourceChunk]) -> IndexSnapshot:
     return build_index_snapshot(
         repo_path="C:/example/repo",
@@ -333,19 +483,25 @@ def _chunk(
     content: str,
     chunk_id: str = "src/example.py:1-1:abc123",
     relative_path: str = "src/example.py",
+    end_line: int | None = None,
 ) -> SourceChunk:
     return SourceChunk(
         chunk_id=chunk_id,
         relative_path=relative_path,
         start_line=1,
-        end_line=max(1, content.count("\n")),
+        end_line=end_line or max(1, content.count("\n")),
         content=content,
         language="python",
     )
 
 
-def _search_result_chunk(*, content: str, relative_path: str) -> dict:
-    return {
-        "chunk": _chunk(content=content, relative_path=relative_path),
-        "score": 0.75,
-    }
+def _search_result(
+    *,
+    content: str,
+    relative_path: str,
+    end_line: int | None = None,
+) -> SearchResult:
+    return SearchResult(
+        chunk=_chunk(content=content, relative_path=relative_path, end_line=end_line),
+        score=0.75,
+    )
