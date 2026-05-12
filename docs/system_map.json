@@ -1,5 +1,92 @@
 [
   {
+    "path": "src/code_context/scanner.py",
+    "role": "Scan a local repository and return structured file metadata for supported source files.",
+    "layer": "scanner",
+    "flow": "repository_scan",
+    "header_fields": {
+      "ROLE": "Scan a local repository and return structured file metadata for supported source files.",
+      "LAYER": "scanner",
+      "FLOW": "repository_scan",
+      "INPUTS": [
+        "local repository path",
+        "supported file extension rules",
+        "ignored directory rules",
+        "file system metadata",
+        "file contents for hashing"
+      ],
+      "OUTPUTS": [
+        "FileMetadata records for supported files"
+      ],
+      "UPSTREAM": [
+        "CLI indexing command",
+        "future FastAPI index endpoint",
+        "future drift detection workflow",
+        "future system indexing workflow"
+      ],
+      "DOWNSTREAM": [
+        "chunker",
+        "index store",
+        "drift detector",
+        "vector indexing",
+        "system map review"
+      ],
+      "OWNS": [
+        "repository traversal",
+        "ignored directory filtering",
+        "supported file extension filtering",
+        "SHA-256 content hash calculation",
+        "basic language inference",
+        "FileMetadata construction"
+      ],
+      "DOES_NOT_OWN": [
+        "source code chunking",
+        "AST parsing",
+        "metadata persistence",
+        "vector storage",
+        "drift comparison",
+        "LLM prompting",
+        "API routing"
+      ],
+      "SIDE_EFFECTS": [
+        "reads file system metadata",
+        "reads supported source files for hashing"
+      ],
+      "STATE": {
+        "reads": [
+          "local repository files"
+        ],
+        "writes": [
+          "none"
+        ]
+      },
+      "NOTES": [
+        "Keep scanner behavior deterministic and easy to test.",
+        "Prefer repo-relative paths for anything that may be shown to users.",
+        "Do not add AI behavior here."
+      ]
+    },
+    "imports": [
+      "__future__",
+      "code_context.models",
+      "hashlib",
+      "pathlib",
+      "typing"
+    ],
+    "internal_imports": [
+      "code_context.models"
+    ],
+    "classes": [],
+    "functions": [
+      "scan_repository",
+      "should_scan_file",
+      "calculate_file_hash",
+      "infer_language",
+      "_normalize_extensions"
+    ],
+    "warnings": []
+  },
+  {
     "path": "src/code_context/config.py",
     "role": "Define local configuration values for the codebase context assistant.",
     "layer": "config",
@@ -246,6 +333,84 @@
       "print_summary",
       "_coerce_str",
       "main"
+    ],
+    "warnings": []
+  },
+  {
+    "path": "tests/test_scanner.py",
+    "role": "Verify repository scanner behavior for supported files, ignored paths, hashes, and metadata.",
+    "layer": "tests",
+    "flow": "scanner_validation",
+    "header_fields": {
+      "ROLE": "Verify repository scanner behavior for supported files, ignored paths, hashes, and metadata.",
+      "LAYER": "tests",
+      "FLOW": "scanner_validation",
+      "INPUTS": [
+        "temporary repository directories",
+        "sample source files",
+        "ignored directory examples",
+        "unsupported file examples"
+      ],
+      "OUTPUTS": [
+        "scanner behavior assertions"
+      ],
+      "UPSTREAM": [
+        "scanner implementation",
+        "FileMetadata model"
+      ],
+      "DOWNSTREAM": [
+        "local test runs",
+        "future CI guardrails",
+        "system map review"
+      ],
+      "OWNS": [
+        "scanner unit test coverage",
+        "repository traversal expectations",
+        "hash stability checks",
+        "relative path behavior checks",
+        "language inference checks"
+      ],
+      "DOES_NOT_OWN": [
+        "chunking tests",
+        "drift detection tests",
+        "vector store tests",
+        "API tests",
+        "agent workflow tests"
+      ],
+      "SIDE_EFFECTS": [
+        "writes temporary test files through pytest tmp_path"
+      ],
+      "STATE": {
+        "reads": [
+          "temporary test files"
+        ],
+        "writes": [
+          "temporary test files"
+        ]
+      },
+      "NOTES": [
+        "These tests keep the scanner deterministic before adding indexing or AI behavior.",
+        "Use byte writes for test files where size or hash expectations matter."
+      ]
+    },
+    "imports": [
+      "__future__",
+      "code_context.scanner",
+      "hashlib",
+      "pathlib",
+      "pytest"
+    ],
+    "internal_imports": [
+      "code_context.scanner"
+    ],
+    "classes": [],
+    "functions": [
+      "test_scan_repository_returns_supported_files_with_metadata",
+      "test_scan_repository_skips_ignored_directories",
+      "test_scan_repository_skips_unsupported_extensions",
+      "test_scan_repository_allows_custom_supported_extensions",
+      "test_calculate_file_hash_is_stable",
+      "test_infer_language"
     ],
     "warnings": []
   }
