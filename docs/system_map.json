@@ -1,0 +1,252 @@
+[
+  {
+    "path": "src/code_context/config.py",
+    "role": "Define local configuration values for the codebase context assistant.",
+    "layer": "config",
+    "flow": "configuration",
+    "header_fields": {
+      "ROLE": "Define local configuration values for the codebase context assistant.",
+      "LAYER": "config",
+      "FLOW": "configuration",
+      "INPUTS": [
+        "local environment defaults",
+        "project index directory setting",
+        "default text encoding setting"
+      ],
+      "OUTPUTS": [
+        "AppConfig"
+      ],
+      "UPSTREAM": [
+        "local development setup",
+        "future CLI commands",
+        "future FastAPI startup configuration"
+      ],
+      "DOWNSTREAM": [
+        "scanner",
+        "index store",
+        "vector store",
+        "API configuration",
+        "local tooling"
+      ],
+      "OWNS": [
+        "local application configuration model",
+        "default index directory",
+        "default file encoding"
+      ],
+      "DOES_NOT_OWN": [
+        "repository scanning",
+        "file hashing",
+        "chunking",
+        "vector search",
+        "LLM provider configuration",
+        "FastAPI route definitions"
+      ],
+      "SIDE_EFFECTS": [
+        "none"
+      ],
+      "STATE": {
+        "reads": [
+          "none"
+        ],
+        "writes": [
+          "none"
+        ]
+      },
+      "NOTES": [
+        "Keep this model small until runtime configuration needs become clearer.",
+        "Avoid hiding project behavior behind configuration too early."
+      ]
+    },
+    "imports": [
+      "__future__",
+      "pathlib",
+      "pydantic"
+    ],
+    "internal_imports": [],
+    "classes": [
+      "AppConfig"
+    ],
+    "functions": [],
+    "warnings": []
+  },
+  {
+    "path": "src/code_context/models.py",
+    "role": "Define shared data models used by the codebase context assistant.",
+    "layer": "core_model",
+    "flow": "shared_models",
+    "header_fields": {
+      "ROLE": "Define shared data models used by the codebase context assistant.",
+      "LAYER": "core_model",
+      "FLOW": "shared_models",
+      "INPUTS": [
+        "repository file paths",
+        "file system metadata",
+        "calculated content hashes",
+        "inferred language values"
+      ],
+      "OUTPUTS": [
+        "FileMetadata"
+      ],
+      "UPSTREAM": [
+        "repository scanner",
+        "future parser and chunker modules",
+        "future index loading workflows"
+      ],
+      "DOWNSTREAM": [
+        "scanner results",
+        "metadata persistence",
+        "drift detection",
+        "vector indexing",
+        "API response models"
+      ],
+      "OWNS": [
+        "shared DTO definitions",
+        "file metadata shape",
+        "stable field names used between project modules"
+      ],
+      "DOES_NOT_OWN": [
+        "file system traversal",
+        "hash calculation",
+        "source parsing",
+        "chunk generation",
+        "persistence writes",
+        "API routing"
+      ],
+      "SIDE_EFFECTS": [
+        "none"
+      ],
+      "STATE": {
+        "reads": [
+          "none"
+        ],
+        "writes": [
+          "none"
+        ]
+      },
+      "NOTES": [
+        "Models should stay simple and explicit.",
+        "Prefer adding fields when a slice actually needs them instead of guessing far ahead."
+      ]
+    },
+    "imports": [
+      "__future__",
+      "pathlib",
+      "pydantic"
+    ],
+    "internal_imports": [],
+    "classes": [
+      "FileMetadata"
+    ],
+    "functions": [],
+    "warnings": []
+  },
+  {
+    "path": "src/code_context/scripts/build_system_map.py",
+    "role": "Scan this project, extract architectural headers and code shape, and generate system map outputs.",
+    "layer": "diagnostics",
+    "flow": "map_generation",
+    "header_fields": {
+      "ROLE": "Scan this project, extract architectural headers and code shape, and generate system map outputs.",
+      "LAYER": "diagnostics",
+      "FLOW": "map_generation",
+      "INPUTS": [
+        "repository Python files",
+        "architecture header docstrings",
+        "import declarations",
+        "class declarations",
+        "function declarations",
+        "system-map output paths"
+      ],
+      "OUTPUTS": [
+        "docs/system_map.md",
+        "docs/system_map.json",
+        "header and structure warnings for scanned modules"
+      ],
+      "UPSTREAM": [
+        "repository source files",
+        "architectural header discipline",
+        "developer local execution"
+      ],
+      "DOWNSTREAM": [
+        "architecture review",
+        "repo cleanup and header correction",
+        "future maintenance and re-entry into the codebase",
+        "AI-assisted project context review"
+      ],
+      "OWNS": [
+        "source file scanning eligibility",
+        "Python module header extraction",
+        "architecture header parsing",
+        "warning generation for header issues",
+        "import inventory extraction",
+        "internal import detection",
+        "class and function inventory extraction",
+        "markdown system-map rendering",
+        "JSON system-map rendering"
+      ],
+      "DOES_NOT_OWN": [
+        "runtime assistant behavior",
+        "source file mutation",
+        "header rewriting",
+        "architecture decisions",
+        "vector indexing",
+        "LLM retrieval",
+        "FastAPI routing",
+        "test execution"
+      ],
+      "SIDE_EFFECTS": [
+        "reads repository source files",
+        "writes docs/system_map.md",
+        "writes docs/system_map.json",
+        "prints console summary output"
+      ],
+      "STATE": {
+        "reads": [
+          "repository source files"
+        ],
+        "writes": [
+          "docs/system_map.md",
+          "docs/system_map.json"
+        ]
+      },
+      "NOTES": [
+        "This script keeps the project architecture inspectable as the codebase evolves.",
+        "It should remain documentation-focused and must not take on runtime assistant logic.",
+        "Header placement rule: from __future__ import annotations comes first, then the architecture header."
+      ]
+    },
+    "imports": [
+      "__future__",
+      "ast",
+      "dataclasses",
+      "json",
+      "pathlib",
+      "typing"
+    ],
+    "internal_imports": [],
+    "classes": [
+      "ModuleMap"
+    ],
+    "functions": [
+      "should_scan",
+      "parse_header",
+      "_parse_header_block",
+      "get_import_name",
+      "is_internal_import",
+      "parse_python_file",
+      "_extract_header_docstring_and_position",
+      "_node_is_string_expr",
+      "_string_expr_value",
+      "_looks_like_arch_header",
+      "collect_modules",
+      "layer_sort_key",
+      "render_markdown",
+      "_layer_group_sort_key",
+      "write_outputs",
+      "print_summary",
+      "_coerce_str",
+      "main"
+    ],
+    "warnings": []
+  }
+]
