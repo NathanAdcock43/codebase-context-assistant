@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 """
-ROLE: Verify FastAPI endpoints for health, indexing, search, and drift detection.
+ROLE: Verify FastAPI endpoints for health, indexing, search, retrieval, and drift detection.
 LAYER: tests
 FLOW: api_validation
 
@@ -19,6 +19,7 @@ UPSTREAM:
 - indexing pipeline
 - JSON index store
 - vector store
+- retrieval service
 - drift detector
 
 DOWNSTREAM:
@@ -33,6 +34,7 @@ OWNS:
 - request and response shape tests
 - endpoint integration tests
 - missing index HTTP behavior tests
+- retrieve endpoint sufficiency tests
 - drift endpoint tests
 
 DOES_NOT_OWN:
@@ -40,6 +42,7 @@ DOES_NOT_OWN:
 - standalone chunker tests
 - standalone index store tests
 - standalone vector store tests
+- standalone retrieval service tests
 - agent workflow tests
 - LLM response tests
 
@@ -162,6 +165,102 @@ def test_search_endpoint_returns_404_when_index_is_missing(tmp_path: Path) -> No
 
     response = client.post(
         "/search",
+        json={
+            "index_dir": str(tmp_path / "missing_index"),
+            "query": "hash",
+        },
+    )
+
+    assert response.status_code == 404
+    assert "Index file does not exist" in response.json()["detail"]
+
+
+def test_retrieve_endpoint_returns_sufficient_grounded_context(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    source_file = repo / "scanner.py"
+    source_file.write_bytes(
+        b"def calculate_file_hash(path):\n"
+        b"    return hashlib.sha256(path.read_bytes()).hexdigest()\n"
+    )
+
+    index_dir = tmp_path / ".code_context_index"
+    client = TestClient(create_app())
+
+    index_response = client.post(
+        "/index",
+        json={
+            "repo_path": str(repo),
+            "index_dir": str(index_dir),
+            "max_lines": 10,
+            "overlap_lines": 0,
+        },
+    )
+    assert index_response.status_code == 200
+
+    retrieve_response = client.post(
+        "/retrieve",
+        json={
+            "index_dir": str(index_dir),
+            "query": "calculate file hash",
+            "limit": 1,
+        },
+    )
+
+    body = retrieve_response.json()
+
+    assert retrieve_response.status_code == 200
+    assert body["query"] == "calculate file hash"
+    assert body["is_sufficient"] is True
+    assert body["insufficient_reason"] is None
+    assert body["result_count"] == 1
+    assert body["results"][0]["relative_path"] == "scanner.py"
+
+
+def test_retrieve_endpoint_reports_insufficient_context(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    source_file = repo / "api.py"
+    source_file.write_bytes(b"def health():\n    return {'status': 'ok'}\n")
+
+    index_dir = tmp_path / ".code_context_index"
+    client = TestClient(create_app())
+
+    index_response = client.post(
+        "/index",
+        json={
+            "repo_path": str(repo),
+            "index_dir": str(index_dir),
+            "max_lines": 10,
+            "overlap_lines": 0,
+        },
+    )
+    assert index_response.status_code == 200
+
+    retrieve_response = client.post(
+        "/retrieve",
+        json={
+            "index_dir": str(index_dir),
+            "query": "postgres liquibase migration",
+            "limit": 3,
+        },
+    )
+
+    body = retrieve_response.json()
+
+    assert retrieve_response.status_code == 200
+    assert body["is_sufficient"] is False
+    assert body["insufficient_reason"] == "Not enough relevant indexed context was found."
+    assert body["result_count"] == 0
+
+
+def test_retrieve_endpoint_returns_404_when_index_is_missing(tmp_path: Path) -> None:
+    client = TestClient(create_app())
+
+    response = client.post(
+        "/retrieve",
         json={
             "index_dir": str(tmp_path / "missing_index"),
             "query": "hash",

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 """
-ROLE: Expose local codebase indexing, search, and drift detection through FastAPI endpoints.
+ROLE: Expose local codebase indexing, search, retrieval, and drift detection through FastAPI endpoints.
 LAYER: api
 FLOW: local_http_api
 
@@ -9,12 +9,14 @@ INPUTS:
 - HTTP health requests
 - repository indexing requests
 - indexed chunk search requests
+- grounded retrieval requests
 - drift detection requests
 
 OUTPUTS:
 - health responses
 - index summary responses
 - search result responses with grounded file and line references
+- retrieval responses with sufficiency decisions
 - drift report responses
 
 UPSTREAM:
@@ -27,6 +29,7 @@ DOWNSTREAM:
 - repository indexing pipeline
 - JSON index store
 - repository scanner
+- retrieval service
 - drift detector
 - local vector store
 
@@ -42,6 +45,7 @@ DOES_NOT_OWN:
 - file hashing
 - source chunking
 - JSON persistence internals
+- retrieval sufficiency logic
 - drift comparison logic
 - vector scoring logic
 - LLM prompting
@@ -50,6 +54,7 @@ DOES_NOT_OWN:
 SIDE_EFFECTS:
 - /index reads repository files and writes a local JSON index
 - /search reads a local JSON index
+- /retrieve reads a local JSON index
 - /drift reads repository files and a local JSON index
 
 STATE:
@@ -72,7 +77,13 @@ from pydantic import BaseModel, Field
 
 from code_context.drift import detect_drift
 from code_context.index_store import DEFAULT_INDEX_FILENAME, JsonIndexStore
+from code_context.models import IndexSnapshot
 from code_context.pipeline import index_repository
+from code_context.retrieval import (
+    DEFAULT_MINIMUM_TOP_SCORE,
+    DEFAULT_RETRIEVAL_MIN_SCORE,
+    load_and_retrieve_context,
+)
 from code_context.scanner import scan_repository
 from code_context.vector_store import search_chunks
 
@@ -117,6 +128,24 @@ class SearchResultResponse(BaseModel):
 
 class SearchResponse(BaseModel):
     query: str
+    result_count: int
+    results: list[SearchResultResponse]
+
+
+class RetrieveRequest(BaseModel):
+    index_dir: str
+    query: str
+    limit: int = Field(default=5, ge=1)
+    min_score: float = Field(default=DEFAULT_RETRIEVAL_MIN_SCORE, ge=0.0)
+    minimum_results: int = Field(default=1, ge=1)
+    minimum_top_score: float = Field(default=DEFAULT_MINIMUM_TOP_SCORE, ge=0.0)
+    index_filename: str = Field(default=DEFAULT_INDEX_FILENAME)
+
+
+class RetrieveResponse(BaseModel):
+    query: str
+    is_sufficient: bool
+    insufficient_reason: str | None
     result_count: int
     results: list[SearchResultResponse]
 
@@ -183,21 +212,37 @@ def create_app() -> FastAPI:
             min_score=request.min_score,
         )
 
-        response_results = [
-            SearchResultResponse(
-                chunk_id=result.chunk.chunk_id,
-                relative_path=result.chunk.relative_path,
-                start_line=result.chunk.start_line,
-                end_line=result.chunk.end_line,
-                language=result.chunk.language,
-                score=result.score,
-                content=result.chunk.content,
-            )
-            for result in results
-        ]
+        response_results = _to_search_result_responses(results)
 
         return SearchResponse(
             query=request.query,
+            result_count=len(response_results),
+            results=response_results,
+        )
+
+    @app.post("/retrieve", response_model=RetrieveResponse)
+    def retrieve_context(request: RetrieveRequest) -> RetrieveResponse:
+        try:
+            retrieval_response = load_and_retrieve_context(
+                index_dir=request.index_dir,
+                query=request.query,
+                limit=request.limit,
+                min_score=request.min_score,
+                minimum_results=request.minimum_results,
+                minimum_top_score=request.minimum_top_score,
+                index_filename=request.index_filename,
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+        response_results = _to_search_result_responses(retrieval_response.results)
+
+        return RetrieveResponse(
+            query=retrieval_response.query,
+            is_sufficient=retrieval_response.is_sufficient,
+            insufficient_reason=retrieval_response.insufficient_reason,
             result_count=len(response_results),
             results=response_results,
         )
@@ -222,13 +267,28 @@ def create_app() -> FastAPI:
     return app
 
 
-def _load_snapshot_or_404(index_dir: str, *, index_filename: str) -> object:
+def _load_snapshot_or_404(index_dir: str, *, index_filename: str) -> IndexSnapshot:
     store = JsonIndexStore(index_dir, index_filename=index_filename)
 
     try:
         return store.load()
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+def _to_search_result_responses(results: list) -> list[SearchResultResponse]:
+    return [
+        SearchResultResponse(
+            chunk_id=result.chunk.chunk_id,
+            relative_path=result.chunk.relative_path,
+            start_line=result.chunk.start_line,
+            end_line=result.chunk.end_line,
+            language=result.chunk.language,
+            score=result.score,
+            content=result.chunk.content,
+        )
+        for result in results
+    ]
 
 
 app = create_app()

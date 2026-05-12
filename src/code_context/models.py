@@ -15,6 +15,7 @@ INPUTS:
 - persisted index snapshot data
 - drift comparison results
 - retrieval scores
+- retrieval sufficiency decisions
 
 OUTPUTS:
 - FileMetadata
@@ -23,6 +24,7 @@ OUTPUTS:
 - FileDrift
 - DriftReport
 - SearchResult
+- RetrievalResponse
 
 UPSTREAM:
 - repository scanner
@@ -30,6 +32,7 @@ UPSTREAM:
 - index store
 - drift detector
 - vector store
+- retrieval service
 - future parser modules
 - future index loading workflows
 
@@ -40,6 +43,7 @@ DOWNSTREAM:
 - drift detection
 - vector indexing
 - API response models
+- grounded retrieval service
 - grounded answer generation
 
 OWNS:
@@ -50,6 +54,7 @@ OWNS:
 - file drift result shape
 - drift report shape
 - search result shape
+- retrieval response shape
 - stable field names used between project modules
 
 DOES_NOT_OWN:
@@ -60,6 +65,7 @@ DOES_NOT_OWN:
 - persistence writes
 - drift comparison logic
 - retrieval scoring logic
+- retrieval sufficiency logic
 - API routing
 
 SIDE_EFFECTS:
@@ -130,3 +136,10 @@ class DriftReport(BaseModel):
 class SearchResult(BaseModel):
     chunk: SourceChunk
     score: float
+
+
+class RetrievalResponse(BaseModel):
+    query: str
+    is_sufficient: bool
+    insufficient_reason: str | None = Field(default=None)
+    results: list[SearchResult] = Field(default_factory=list)

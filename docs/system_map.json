@@ -1,23 +1,25 @@
 [
   {
     "path": "src/code_context/api.py",
-    "role": "Expose local codebase indexing, search, and drift detection through FastAPI endpoints.",
+    "role": "Expose local codebase indexing, search, retrieval, and drift detection through FastAPI endpoints.",
     "layer": "api",
     "flow": "local_http_api",
     "header_fields": {
-      "ROLE": "Expose local codebase indexing, search, and drift detection through FastAPI endpoints.",
+      "ROLE": "Expose local codebase indexing, search, retrieval, and drift detection through FastAPI endpoints.",
       "LAYER": "api",
       "FLOW": "local_http_api",
       "INPUTS": [
         "HTTP health requests",
         "repository indexing requests",
         "indexed chunk search requests",
+        "grounded retrieval requests",
         "drift detection requests"
       ],
       "OUTPUTS": [
         "health responses",
         "index summary responses",
         "search result responses with grounded file and line references",
+        "retrieval responses with sufficiency decisions",
         "drift report responses"
       ],
       "UPSTREAM": [
@@ -30,6 +32,7 @@
         "repository indexing pipeline",
         "JSON index store",
         "repository scanner",
+        "retrieval service",
         "drift detector",
         "local vector store"
       ],
@@ -45,6 +48,7 @@
         "file hashing",
         "source chunking",
         "JSON persistence internals",
+        "retrieval sufficiency logic",
         "drift comparison logic",
         "vector scoring logic",
         "LLM prompting",
@@ -53,6 +57,7 @@
       "SIDE_EFFECTS": [
         "/index reads repository files and writes a local JSON index",
         "/search reads a local JSON index",
+        "/retrieve reads a local JSON index",
         "/drift reads repository files and a local JSON index"
       ],
       "STATE": {
@@ -74,7 +79,9 @@
       "__future__",
       "code_context.drift",
       "code_context.index_store",
+      "code_context.models",
       "code_context.pipeline",
+      "code_context.retrieval",
       "code_context.scanner",
       "code_context.vector_store",
       "fastapi",
@@ -84,7 +91,9 @@
     "internal_imports": [
       "code_context.drift",
       "code_context.index_store",
+      "code_context.models",
       "code_context.pipeline",
+      "code_context.retrieval",
       "code_context.scanner",
       "code_context.vector_store"
     ],
@@ -95,11 +104,102 @@
       "SearchRequest",
       "SearchResultResponse",
       "SearchResponse",
+      "RetrieveRequest",
+      "RetrieveResponse",
       "DriftRequest"
     ],
     "functions": [
       "create_app",
-      "_load_snapshot_or_404"
+      "_load_snapshot_or_404",
+      "_to_search_result_responses"
+    ],
+    "warnings": []
+  },
+  {
+    "path": "src/code_context/retrieval.py",
+    "role": "Retrieve grounded source context from an index snapshot and decide whether it is sufficient.",
+    "layer": "retrieval",
+    "flow": "grounded_context_retrieval",
+    "header_fields": {
+      "ROLE": "Retrieve grounded source context from an index snapshot and decide whether it is sufficient.",
+      "LAYER": "retrieval",
+      "FLOW": "grounded_context_retrieval",
+      "INPUTS": [
+        "IndexSnapshot records",
+        "developer query text",
+        "search limit",
+        "search score threshold",
+        "minimum result count",
+        "minimum top score threshold"
+      ],
+      "OUTPUTS": [
+        "RetrievalResponse records with sufficiency decisions and grounded SearchResult records"
+      ],
+      "UPSTREAM": [
+        "JSON index store",
+        "FastAPI retrieve endpoint",
+        "future retriever agent node",
+        "future answer generation workflow"
+      ],
+      "DOWNSTREAM": [
+        "verifier",
+        "responder",
+        "FastAPI response models",
+        "future LangGraph workflow",
+        "grounded answer generation"
+      ],
+      "OWNS": [
+        "retrieval orchestration over indexed chunks",
+        "retrieval sufficiency checks",
+        "insufficient-context refusal reasons",
+        "loading indexed snapshots for retrieval",
+        "preserving grounded SearchResult records"
+      ],
+      "DOES_NOT_OWN": [
+        "repository scanning",
+        "source chunking",
+        "JSON persistence internals",
+        "vector scoring implementation",
+        "drift detection",
+        "LLM prompting",
+        "answer generation",
+        "API route definitions"
+      ],
+      "SIDE_EFFECTS": [
+        "load_and_retrieve_context reads a local JSON index file"
+      ],
+      "STATE": {
+        "reads": [
+          "local JSON index file when load_and_retrieve_context is used"
+        ],
+        "writes": [
+          "none"
+        ]
+      },
+      "NOTES": [
+        "This service does not generate answers.",
+        "It decides whether enough grounded context exists for a future answer step.",
+        "Keep refusal reasons plain and developer-facing."
+      ]
+    },
+    "imports": [
+      "__future__",
+      "code_context.index_store",
+      "code_context.models",
+      "code_context.vector_store",
+      "pathlib"
+    ],
+    "internal_imports": [
+      "code_context.index_store",
+      "code_context.models",
+      "code_context.vector_store"
+    ],
+    "classes": [],
+    "functions": [
+      "load_and_retrieve_context",
+      "retrieve_grounded_context",
+      "_determine_insufficient_reason",
+      "_validate_retrieval_settings"
     ],
     "warnings": []
   },
@@ -721,7 +821,8 @@
         "source chunk content",
         "persisted index snapshot data",
         "drift comparison results",
-        "retrieval scores"
+        "retrieval scores",
+        "retrieval sufficiency decisions"
       ],
       "OUTPUTS": [
         "FileMetadata",
@@ -729,7 +830,8 @@
         "IndexSnapshot",
         "FileDrift",
         "DriftReport",
-        "SearchResult"
+        "SearchResult",
+        "RetrievalResponse"
       ],
       "UPSTREAM": [
         "repository scanner",
@@ -737,6 +839,7 @@
         "index store",
         "drift detector",
         "vector store",
+        "retrieval service",
         "future parser modules",
         "future index loading workflows"
       ],
@@ -747,6 +850,7 @@
         "drift detection",
         "vector indexing",
         "API response models",
+        "grounded retrieval service",
         "grounded answer generation"
       ],
       "OWNS": [
@@ -757,6 +861,7 @@
         "file drift result shape",
         "drift report shape",
         "search result shape",
+        "retrieval response shape",
         "stable field names used between project modules"
       ],
       "DOES_NOT_OWN": [
@@ -767,6 +872,7 @@
         "persistence writes",
         "drift comparison logic",
         "retrieval scoring logic",
+        "retrieval sufficiency logic",
         "API routing"
       ],
       "SIDE_EFFECTS": [
@@ -797,7 +903,8 @@
       "IndexSnapshot",
       "FileDrift",
       "DriftReport",
-      "SearchResult"
+      "SearchResult",
+      "RetrievalResponse"
     ],
     "functions": [],
     "warnings": []
@@ -913,11 +1020,11 @@
   },
   {
     "path": "tests/test_api.py",
-    "role": "Verify FastAPI endpoints for health, indexing, search, and drift detection.",
+    "role": "Verify FastAPI endpoints for health, indexing, search, retrieval, and drift detection.",
     "layer": "tests",
     "flow": "api_validation",
     "header_fields": {
-      "ROLE": "Verify FastAPI endpoints for health, indexing, search, and drift detection.",
+      "ROLE": "Verify FastAPI endpoints for health, indexing, search, retrieval, and drift detection.",
       "LAYER": "tests",
       "FLOW": "api_validation",
       "INPUTS": [
@@ -934,6 +1041,7 @@
         "indexing pipeline",
         "JSON index store",
         "vector store",
+        "retrieval service",
         "drift detector"
       ],
       "DOWNSTREAM": [
@@ -948,6 +1056,7 @@
         "request and response shape tests",
         "endpoint integration tests",
         "missing index HTTP behavior tests",
+        "retrieve endpoint sufficiency tests",
         "drift endpoint tests"
       ],
       "DOES_NOT_OWN": [
@@ -955,6 +1064,7 @@
         "standalone chunker tests",
         "standalone index store tests",
         "standalone vector store tests",
+        "standalone retrieval service tests",
         "agent workflow tests",
         "LLM response tests"
       ],
@@ -992,6 +1102,9 @@
       "test_index_endpoint_indexes_repository_and_returns_summary",
       "test_search_endpoint_returns_grounded_chunk_results",
       "test_search_endpoint_returns_404_when_index_is_missing",
+      "test_retrieve_endpoint_returns_sufficient_grounded_context",
+      "test_retrieve_endpoint_reports_insufficient_context",
+      "test_retrieve_endpoint_returns_404_when_index_is_missing",
       "test_drift_endpoint_reports_modified_file_after_indexing",
       "test_drift_endpoint_returns_404_when_index_is_missing"
     ],
