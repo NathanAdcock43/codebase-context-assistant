@@ -15,10 +15,12 @@ INPUTS:
 - retrieval score thresholds
 - retrieval sufficiency thresholds
 - optional repository override for drift checks
+- optional generated-answer ask flags
 
 OUTPUTS:
 - plain-text indexing summaries for terminal users
 - plain-text ask results for terminal users
+- optional LLM metadata in ask output when generated answers are requested
 - plain-text drift reports for terminal users
 - process exit codes for command success or operational failure
 
@@ -35,6 +37,8 @@ DOWNSTREAM:
 - reusable ask workflow service
 - optional LangGraph workflow adapter through ask service
 - deterministic agent workflow fallback through ask service
+- configured LLM client factory through ask service
+- grounded answer generation through ask service
 
 OWNS:
 - CLI argument parsing
@@ -42,6 +46,8 @@ OWNS:
 - terminal output formatting
 - CLI error reporting
 - process exit code behavior
+- generated-answer ask flag forwarding
+- generated-answer terminal metadata formatting
 
 DOES_NOT_OWN:
 - repository traversal rules
@@ -53,11 +59,13 @@ DOES_NOT_OWN:
 - ask workflow orchestration
 - optional LangGraph workflow behavior
 - deterministic agent workflow behavior
-- LLM prompting
+- prompt formatting
+- provider-specific SDK calls
 
 SIDE_EFFECTS:
 - index command reads repository files and writes a local JSON index file
 - ask command reads a local JSON index file and repository files through the ask service
+- ask command may call a configured LLM client when --use-llm is passed and ask service guardrails pass
 - drift command reads a local JSON index file and repository files
 - writes terminal output
 - writes terminal error output
@@ -66,6 +74,7 @@ STATE:
   reads:
     - local repository files
     - local JSON index file
+    - process environment through ask service when generated answers are requested
   writes:
     - local JSON index file through index command
     - terminal stdout
@@ -74,6 +83,7 @@ STATE:
 NOTES:
 - Keep CLI behavior thin and reuse application services.
 - Stale-index and insufficient-context refusals are successful command executions because the tool behaved correctly.
+- Generated answers must remain opt-in through --use-llm.
 - Operational failures such as missing repository paths or missing index files should return a non-zero exit code.
 """
 
@@ -87,6 +97,7 @@ from pydantic import ValidationError
 from code_context.ask import AskWorkflowResult, ask_indexed_code_question
 from code_context.drift import detect_drift
 from code_context.index_store import DEFAULT_INDEX_FILENAME, JsonIndexStore
+from code_context.llm import LlmClientUnavailableError
 from code_context.models import DriftReport, FileDrift, IndexSnapshot
 from code_context.pipeline import index_repository
 from code_context.scanner import scan_repository
@@ -199,6 +210,22 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Use the deterministic workflow directly instead of preferring LangGraph.",
     )
+    ask_parser.add_argument(
+        "--use-llm",
+        action="store_true",
+        help="Opt in to a generated answer after stale-index and grounding checks pass.",
+    )
+    ask_parser.add_argument(
+        "--llm-model",
+        default=None,
+        help="Optional LLM model override for generated answers.",
+    )
+    ask_parser.add_argument(
+        "--llm-temperature",
+        type=float,
+        default=0.0,
+        help="LLM temperature for generated answers. Must be between 0.0 and 2.0.",
+    )
 
     drift_parser = subparsers.add_parser(
         "drift",
@@ -259,8 +286,11 @@ def _run_ask_command(args: argparse.Namespace) -> int:
             minimum_results=args.minimum_results,
             minimum_top_score=args.minimum_top_score,
             prefer_langgraph=not args.no_langgraph,
+            use_llm=args.use_llm,
+            llm_model=args.llm_model,
+            llm_temperature=args.llm_temperature,
         )
-    except (FileNotFoundError, NotADirectoryError, ValidationError, ValueError) as exc:
+    except (FileNotFoundError, NotADirectoryError, ValidationError, LlmClientUnavailableError, ValueError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
 
@@ -306,10 +336,27 @@ def format_ask_result(result: AskWorkflowResult) -> str:
         f"Confidence: {result.confidence}",
         f"Grounded: {_yes_no(result.is_grounded)}",
         f"Stale: {_yes_no(result.is_stale)}",
-        "",
-        "Answer:",
-        result.answer,
+        f"LLM generated: {_yes_no(result.is_llm_generated)}",
     ]
+
+    if result.is_llm_generated:
+        lines.extend(
+            [
+                f"LLM provider: {result.llm_provider or 'unknown'}",
+                f"LLM model: {result.llm_model or 'unknown'}",
+            ]
+        )
+
+        if result.llm_usage:
+            lines.append(f"LLM usage: {result.llm_usage}")
+
+    lines.extend(
+        [
+            "",
+            "Answer:",
+            result.answer,
+        ]
+    )
 
     if result.insufficient_reason:
         lines.extend(

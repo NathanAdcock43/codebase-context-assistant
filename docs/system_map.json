@@ -4067,11 +4067,13 @@
         "retrieval limit",
         "retrieval score thresholds",
         "retrieval sufficiency thresholds",
-        "optional repository override for drift checks"
+        "optional repository override for drift checks",
+        "optional generated-answer ask flags"
       ],
       "OUTPUTS": [
         "plain-text indexing summaries for terminal users",
         "plain-text ask results for terminal users",
+        "optional LLM metadata in ask output when generated answers are requested",
         "plain-text drift reports for terminal users",
         "process exit codes for command success or operational failure"
       ],
@@ -4087,14 +4089,18 @@
         "JSON index store",
         "reusable ask workflow service",
         "optional LangGraph workflow adapter through ask service",
-        "deterministic agent workflow fallback through ask service"
+        "deterministic agent workflow fallback through ask service",
+        "configured LLM client factory through ask service",
+        "grounded answer generation through ask service"
       ],
       "OWNS": [
         "CLI argument parsing",
         "CLI command dispatch",
         "terminal output formatting",
         "CLI error reporting",
-        "process exit code behavior"
+        "process exit code behavior",
+        "generated-answer ask flag forwarding",
+        "generated-answer terminal metadata formatting"
       ],
       "DOES_NOT_OWN": [
         "repository traversal rules",
@@ -4106,11 +4112,13 @@
         "ask workflow orchestration",
         "optional LangGraph workflow behavior",
         "deterministic agent workflow behavior",
-        "LLM prompting"
+        "prompt formatting",
+        "provider-specific SDK calls"
       ],
       "SIDE_EFFECTS": [
         "index command reads repository files and writes a local JSON index file",
         "ask command reads a local JSON index file and repository files through the ask service",
+        "ask command may call a configured LLM client when --use-llm is passed and ask service guardrails pass",
         "drift command reads a local JSON index file and repository files",
         "writes terminal output",
         "writes terminal error output"
@@ -4118,7 +4126,8 @@
       "STATE": {
         "reads": [
           "local repository files",
-          "local JSON index file"
+          "local JSON index file",
+          "process environment through ask service when generated answers are requested"
         ],
         "writes": [
           "local JSON index file through index command",
@@ -4129,6 +4138,7 @@
       "NOTES": [
         "Keep CLI behavior thin and reuse application services.",
         "Stale-index and insufficient-context refusals are successful command executions because the tool behaved correctly.",
+        "Generated answers must remain opt-in through --use-llm.",
         "Operational failures such as missing repository paths or missing index files should return a non-zero exit code."
       ]
     },
@@ -4138,6 +4148,7 @@
       "code_context.ask",
       "code_context.drift",
       "code_context.index_store",
+      "code_context.llm",
       "code_context.models",
       "code_context.pipeline",
       "code_context.scanner",
@@ -4150,6 +4161,7 @@
       "code_context.ask",
       "code_context.drift",
       "code_context.index_store",
+      "code_context.llm",
       "code_context.models",
       "code_context.pipeline",
       "code_context.scanner"
