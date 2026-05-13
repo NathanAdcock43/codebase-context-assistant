@@ -28,6 +28,8 @@ The project can currently:
 - route ask workflow execution through an optional LangGraph adapter with deterministic fallback
 - optionally call a configured OpenAI LLM after stale-index and grounding checks pass
 - downgrade generated self-refusals when the supplied context is insufficient
+- optionally call a configured OpenAI LLM after stale-index and grounding checks pass
+- downgrade generated self-refusals when the supplied context is insufficient
 
 ## Current architecture
 
@@ -103,6 +105,10 @@ Install with optional OpenAI support if you want generated answers:
 
     .\.venv\Scripts\python.exe -m pip install -e ".[openai]"
 
+Install with optional OpenAI support if you want generated answers:
+
+    .\.venv\Scripts\python.exe -m pip install -e ".[openai]"
+
 Run tests:
 
     py -3.13 -m pytest
@@ -134,6 +140,10 @@ Ask with an optional generated answer after loading OpenAI environment settings:
 
     py -3.13 -m code_context.cli ask --index-dir $IndexDir --question "Where is the CLI generated answer opt-in implemented?" --limit 8 --no-langgraph --use-llm --llm-temperature 0
 
+Ask with an optional generated answer after loading OpenAI environment settings:
+
+    py -3.13 -m code_context.cli ask --index-dir $IndexDir --question "Where is the CLI generated answer opt-in implemented?" --limit 8 --no-langgraph --use-llm --llm-temperature 0
+
 Check whether the index is stale:
 
     py -3.13 -m code_context.cli drift --index-dir $IndexDir
@@ -160,6 +170,20 @@ Current endpoints:
 - `POST /retrieve`
 - `POST /ask`
 - `POST /drift`
+
+Optional generated-answer `/ask` request shape:
+
+```json
+{
+  "index_dir": ".code_context_index",
+  "question": "Where is the CLI generated answer opt-in implemented?",
+  "limit": 8,
+  "use_llm": true,
+  "llm_temperature": 0
+}
+```
+
+Generated answers still use the same stale-index and grounding checks before the provider is called.
 
 Optional generated-answer `/ask` request shape:
 
