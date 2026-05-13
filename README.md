@@ -112,8 +112,8 @@ For detailed setup instructions, see:
 
 Set local paths:
 
-    $RepoPath = "C:\TCC\LocalSources\NathansUtils\codebase-context-assistant"
-    $IndexDir = ".\.code_context_index"
+    $RepoPath = (Get-Location).Path
+    $IndexDir = Join-Path $RepoPath ".code_context_index"
 
 Create an index:
 

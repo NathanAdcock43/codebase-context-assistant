@@ -77,8 +77,8 @@ The scanned file count may increase as the project grows.
 
 Set paths for the current repository:
 
-    $RepoPath = "C:\TCC\LocalSources\NathansUtils\codebase-context-assistant"
-    $IndexDir = ".\.code_context_index"
+    $RepoPath = (Get-Location).Path
+    $IndexDir = Join-Path $RepoPath ".code_context_index"
 
 Remove an old local index when starting fresh:
 

@@ -16,12 +16,12 @@ The project is still intentionally small and local. The current workflow does no
 
 Run these commands from the project root:
 
-    cd C:\TCC\LocalSources\NathansUtils\codebase-context-assistant
+    git status
 
 Use the current repository as the demo target:
 
-    $RepoPath = "C:\TCC\LocalSources\NathansUtils\codebase-context-assistant"
-    $IndexDir = ".\.code_context_index"
+    $RepoPath = (Get-Location).Path
+    $IndexDir = Join-Path $RepoPath ".code_context_index"
 
 Optional cleanup before a fresh demo:
 
@@ -56,7 +56,7 @@ The system map is part of the project discipline. It helps keep the codebase exp
 Expected output shape:
 
     Indexed repository:
-    C:\TCC\LocalSources\NathansUtils\codebase-context-assistant
+    Join-Path $RepoPath ".code_context_index"
 
     Index path: .code_context_index\code_context_index.json
     Indexed at: ...
