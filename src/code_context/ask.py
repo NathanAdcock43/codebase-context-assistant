@@ -18,10 +18,10 @@ INPUTS:
 - optional LLM model override
 
 OUTPUTS:
-- AskWorkflowResult records with grounded answers, stale-index refusals, insufficient-context refusals, or optional generated answers
+- AskWorkflowResult records with grounded answers, stale-index refusals, insufficient-context refusals, optional generated answers, or generated self-refusals
 - grounded SearchResult records when context is sufficient
 - agent step status records when workflow execution reaches the agent
-- optional LLM provider metadata when a generated answer is requested and produced
+- optional LLM provider metadata when a generated answer request executes
 
 UPSTREAM:
 - FastAPI ask endpoint
@@ -48,6 +48,7 @@ OWNS:
 - reusable ask result shape for API and CLI callers
 - optional generated answer orchestration after grounding checks pass
 - guardrails that prevent LLM calls when context is stale or insufficient
+- generated-answer self-refusal confidence downgrades
 
 DOES_NOT_OWN:
 - HTTP request and response DTOs
@@ -78,6 +79,7 @@ NOTES:
 - Keep ask orchestration independent from FastAPI so CLI and API can share it.
 - Refuse before running the agent workflow when indexed context is stale.
 - Do not call an LLM when retrieval or verification says context is insufficient.
+- Generated answers that report insufficient supplied context should not keep grounded_generated confidence.
 - The optional LangGraph adapter owns fallback to the deterministic workflow when LangGraph is unavailable.
 """
 
@@ -100,6 +102,26 @@ from code_context.scanner import scan_repository
 
 ASK_STALE_INDEX_REFUSAL = "Indexed context is stale. Re-index the repository before asking questions."
 LLM_GENERATED_CONFIDENCE = "grounded_generated"
+LLM_GENERATED_REFUSAL_CONFIDENCE = "generated_refusal"
+GENERATED_ANSWER_REFUSAL_REASON = (
+    "Generated answer reported that the supplied sources were insufficient."
+)
+GENERATED_ANSWER_REFUSAL_MARKERS = (
+    "provided sources are insufficient",
+    "provided source context is insufficient",
+    "supplied sources are insufficient",
+    "supplied source context is insufficient",
+    "current indexed context is insufficient",
+    "provided context is insufficient",
+    "source context is insufficient",
+    "not present in the supplied context",
+    "not present in the provided context",
+    "not shown in the provided source context",
+    "provided context does not include",
+    "cannot answer from the provided sources",
+    "can't answer from the provided sources",
+    "insufficient context",
+)
 
 
 class AskWorkflowResult(BaseModel):
@@ -201,10 +223,23 @@ def build_generated_ask_result(
         temperature=llm_temperature,
     )
 
+    generated_answer_text = _generated_answer_text(generated_answer)
+    is_generated_refusal = _generated_answer_reports_insufficient_context(generated_answer_text)
+
     return result.model_copy(
         update={
-            "answer": _generated_answer_text(generated_answer),
-            "confidence": LLM_GENERATED_CONFIDENCE,
+            "answer": generated_answer_text,
+            "confidence": (
+                LLM_GENERATED_REFUSAL_CONFIDENCE
+                if is_generated_refusal
+                else LLM_GENERATED_CONFIDENCE
+            ),
+            "is_grounded": False if is_generated_refusal else result.is_grounded,
+            "insufficient_reason": (
+                GENERATED_ANSWER_REFUSAL_REASON
+                if is_generated_refusal
+                else result.insufficient_reason
+            ),
             "is_llm_generated": True,
             "llm_provider": _generated_answer_provider(generated_answer),
             "llm_model": _generated_answer_model(generated_answer, fallback_model=resolved_model),
@@ -236,6 +271,12 @@ def build_stale_ask_result(question: str) -> AskWorkflowResult:
         sources=[],
         steps=[],
     )
+
+
+def _generated_answer_reports_insufficient_context(answer_text: str) -> bool:
+    """Return true when generated text says the supplied context is insufficient."""
+    normalized_answer = " ".join(answer_text.casefold().split())
+    return any(marker in normalized_answer for marker in GENERATED_ANSWER_REFUSAL_MARKERS)
 
 
 def _generated_answer_text(generated_answer: Any) -> str:

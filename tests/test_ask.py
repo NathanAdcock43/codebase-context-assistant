@@ -91,16 +91,25 @@ from code_context.scanner import calculate_file_hash
 
 
 class FakeLlmClient:
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        content: str = "The calculate_file_hash function is handled in scanner.py lines 1-2.",
+        provider: str = "fake",
+        usage: dict[str, int] | None = None,
+    ) -> None:
+        self.content = content
+        self.provider = provider
+        self.usage = usage or {"input_tokens": 25, "output_tokens": 12}
         self.requests: list[LlmRequest] = []
 
     def complete(self, request: LlmRequest) -> LlmResponse:
         self.requests.append(request)
         return LlmResponse(
-            content="The calculate_file_hash function is handled in scanner.py lines 1-2.",
+            content=self.content,
             model=request.model,
-            provider="fake",
-            usage={"input_tokens": 25, "output_tokens": 12},
+            provider=self.provider,
+            usage=self.usage,
         )
 
 
@@ -195,6 +204,61 @@ def test_ask_indexed_code_question_can_generate_grounded_answer_with_injected_ll
     assert result.sources[0].chunk.relative_path == "scanner.py"
     assert len(fake_llm.requests) == 1
     assert fake_llm.requests[0].model == "fake-model"
+
+
+def test_ask_indexed_code_question_downgrades_generated_self_refusal_confidence(
+    tmp_path: Path,
+) -> None:
+    source_file = tmp_path / "scanner.py"
+    source_file.write_bytes(
+        b"def calculate_file_hash(path):\n"
+        b"    return hashlib.sha256(path.read_bytes()).hexdigest()\n"
+    )
+    snapshot = _snapshot(
+        repo_root=tmp_path,
+        files=[_file_metadata(source_file, "scanner.py")],
+        chunks=[
+            _chunk(
+                chunk_id="scanner.py:1-2",
+                relative_path="scanner.py",
+                content=(
+                    "def calculate_file_hash(path):\n"
+                    "    return hashlib.sha256(path.read_bytes()).hexdigest()\n"
+                ),
+            )
+        ],
+    )
+    fake_llm = FakeLlmClient(
+        content=(
+            "The provided sources are insufficient to identify the exact implementation. "
+            "The current indexed context is insufficient."
+        )
+    )
+
+    result = ask_module.ask_indexed_code_question(
+        question="Where is calculate file hash handled?",
+        snapshot=snapshot,
+        limit=1,
+        prefer_langgraph=False,
+        use_llm=True,
+        llm_client=fake_llm,
+        llm_model="fake-model",
+    )
+
+    assert result.confidence == "generated_refusal"
+    assert result.is_grounded is False
+    assert result.is_stale is False
+    assert result.is_llm_generated is True
+    assert result.llm_provider == "fake"
+    assert result.llm_model == "fake-model"
+    assert result.llm_usage == {"input_tokens": 25, "output_tokens": 12}
+    assert result.insufficient_reason == (
+        "Generated answer reported that the supplied sources were insufficient."
+    )
+    assert "current indexed context is insufficient" in result.answer
+    assert result.sources[0].chunk.relative_path == "scanner.py"
+    assert any("scanner.py" in citation for citation in result.citations)
+    assert len(fake_llm.requests) == 1
 
 
 def test_ask_indexed_code_question_returns_insufficient_context(tmp_path: Path) -> None:

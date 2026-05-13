@@ -2314,6 +2314,7 @@
     "functions": [
       "test_ask_indexed_code_question_returns_grounded_result",
       "test_ask_indexed_code_question_can_generate_grounded_answer_with_injected_llm_client",
+      "test_ask_indexed_code_question_downgrades_generated_self_refusal_confidence",
       "test_ask_indexed_code_question_returns_insufficient_context",
       "test_ask_indexed_code_question_does_not_call_llm_when_context_is_insufficient",
       "test_ask_indexed_code_question_refuses_when_snapshot_is_stale",
@@ -3799,10 +3800,10 @@
         "optional LLM model override"
       ],
       "OUTPUTS": [
-        "AskWorkflowResult records with grounded answers, stale-index refusals, insufficient-context refusals, or optional generated answers",
+        "AskWorkflowResult records with grounded answers, stale-index refusals, insufficient-context refusals, optional generated answers, or generated self-refusals",
         "grounded SearchResult records when context is sufficient",
         "agent step status records when workflow execution reaches the agent",
-        "optional LLM provider metadata when a generated answer is requested and produced"
+        "optional LLM provider metadata when a generated answer request executes"
       ],
       "UPSTREAM": [
         "FastAPI ask endpoint",
@@ -3828,7 +3829,8 @@
         "confidence classification for ask results",
         "reusable ask result shape for API and CLI callers",
         "optional generated answer orchestration after grounding checks pass",
-        "guardrails that prevent LLM calls when context is stale or insufficient"
+        "guardrails that prevent LLM calls when context is stale or insufficient",
+        "generated-answer self-refusal confidence downgrades"
       ],
       "DOES_NOT_OWN": [
         "HTTP request and response DTOs",
@@ -3861,6 +3863,7 @@
         "Keep ask orchestration independent from FastAPI so CLI and API can share it.",
         "Refuse before running the agent workflow when indexed context is stale.",
         "Do not call an LLM when retrieval or verification says context is insufficient.",
+        "Generated answers that report insufficient supplied context should not keep grounded_generated confidence.",
         "The optional LangGraph adapter owns fallback to the deterministic workflow when LangGraph is unavailable."
       ]
     },
@@ -3900,6 +3903,7 @@
       "build_generated_ask_result",
       "detect_snapshot_drift",
       "build_stale_ask_result",
+      "_generated_answer_reports_insufficient_context",
       "_generated_answer_text",
       "_generated_answer_provider",
       "_generated_answer_model",
