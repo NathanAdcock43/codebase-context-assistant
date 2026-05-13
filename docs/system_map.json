@@ -2707,6 +2707,91 @@
     "warnings": []
   },
   {
+    "path": "tests/test_llm.py",
+    "role": "Verify provider-neutral LLM client boundary behavior.",
+    "layer": "tests",
+    "flow": "llm_client_boundary_validation",
+    "header_fields": {
+      "ROLE": "Verify provider-neutral LLM client boundary behavior.",
+      "LAYER": "tests",
+      "FLOW": "llm_client_boundary_validation",
+      "INPUTS": [
+        "sample LLM messages",
+        "sample LLM requests",
+        "sample LLM responses",
+        "invalid model and temperature values",
+        "disabled LLM client calls"
+      ],
+      "OUTPUTS": [
+        "LLM model validation assertions",
+        "disabled client behavior assertions",
+        "usage metadata normalization assertions"
+      ],
+      "UPSTREAM": [
+        "LLM boundary module",
+        "future LLM provider adapter",
+        "future grounded answer generation service",
+        "future responder node LLM integration"
+      ],
+      "DOWNSTREAM": [
+        "local test runs",
+        "future CI guardrails",
+        "future OpenAI client tests",
+        "future grounded answer generation tests",
+        "system map review"
+      ],
+      "OWNS": [
+        "provider-neutral LLM DTO tests",
+        "LLM request validation tests",
+        "LLM response validation tests",
+        "disabled client placeholder tests"
+      ],
+      "DOES_NOT_OWN": [
+        "OpenAI SDK tests",
+        "prompt construction tests",
+        "retrieval tests",
+        "verifier tests",
+        "API route tests",
+        "CLI tests",
+        "LangGraph tests"
+      ],
+      "SIDE_EFFECTS": [
+        "none"
+      ],
+      "STATE": {
+        "reads": [
+          "in-memory test values"
+        ],
+        "writes": [
+          "none"
+        ]
+      },
+      "NOTES": [
+        "These tests do not require a real provider key.",
+        "This keeps the LLM seam testable before any LLM call is added."
+      ]
+    },
+    "imports": [
+      "__future__",
+      "code_context.llm",
+      "pytest"
+    ],
+    "internal_imports": [
+      "code_context.llm"
+    ],
+    "classes": [],
+    "functions": [
+      "test_llm_message_trims_content",
+      "test_llm_request_requires_at_least_one_message",
+      "test_llm_request_rejects_temperature_outside_supported_range",
+      "test_llm_response_uses_independent_usage_defaults",
+      "test_disabled_llm_client_raises_clear_error",
+      "test_build_disabled_llm_client_returns_disabled_client_boundary",
+      "test_build_usage_metadata_returns_plain_copy"
+    ],
+    "warnings": []
+  },
+  {
     "path": "tests/test_local_setup_docs.py",
     "role": "Verify local setup documentation for GitHub-oriented project packaging.",
     "layer": "tests",
@@ -3353,6 +3438,98 @@
       "format_drift_report",
       "_append_drift_group",
       "_yes_no"
+    ],
+    "warnings": []
+  },
+  {
+    "path": "src/code_context/llm.py",
+    "role": "Define provider-neutral LLM request, response, and client boundary models.",
+    "layer": "llm",
+    "flow": "llm_client_boundary",
+    "header_fields": {
+      "ROLE": "Define provider-neutral LLM request, response, and client boundary models.",
+      "LAYER": "llm",
+      "FLOW": "llm_client_boundary",
+      "INPUTS": [
+        "future grounded answer prompts",
+        "future provider configuration",
+        "model names",
+        "message lists",
+        "temperature settings"
+      ],
+      "OUTPUTS": [
+        "LlmMessage records",
+        "LlmRequest records",
+        "LlmResponse records",
+        "LlmClient protocol",
+        "DisabledLlmClient placeholder behavior"
+      ],
+      "UPSTREAM": [
+        "future answer generation service",
+        "future responder node",
+        "future OpenAI provider adapter",
+        "AppConfig provider settings",
+        "local tests"
+      ],
+      "DOWNSTREAM": [
+        "future LLM answer generation",
+        "future grounded response synthesis",
+        "future provider-specific clients",
+        "future API and CLI ask responses"
+      ],
+      "OWNS": [
+        "provider-neutral LLM message shape",
+        "provider-neutral LLM request shape",
+        "provider-neutral LLM response shape",
+        "LLM client protocol",
+        "disabled client placeholder behavior",
+        "shared LLM validation rules"
+      ],
+      "DOES_NOT_OWN": [
+        "OpenAI SDK calls",
+        "prompt construction",
+        "retrieval",
+        "grounding verification",
+        "stale-index refusal",
+        "API routing",
+        "CLI argument parsing",
+        "LangGraph workflow routing"
+      ],
+      "SIDE_EFFECTS": [
+        "DisabledLlmClient raises an error when called"
+      ],
+      "STATE": {
+        "reads": [
+          "none"
+        ],
+        "writes": [
+          "none"
+        ]
+      },
+      "NOTES": [
+        "This module does not call an LLM yet.",
+        "Keep this provider-neutral so OpenAI or another provider can be added behind the same boundary.",
+        "Future answer generation must still run only after stale-index and sufficiency checks pass."
+      ]
+    },
+    "imports": [
+      "__future__",
+      "collections.abc",
+      "pydantic",
+      "typing"
+    ],
+    "internal_imports": [],
+    "classes": [
+      "LlmClientUnavailableError",
+      "LlmMessage",
+      "LlmRequest",
+      "LlmResponse",
+      "LlmClient",
+      "DisabledLlmClient"
+    ],
+    "functions": [
+      "build_disabled_llm_client",
+      "build_usage_metadata"
     ],
     "warnings": []
   }
