@@ -2971,6 +2971,108 @@
     "warnings": []
   },
   {
+    "path": "tests/test_openai_client.py",
+    "role": "Verify optional OpenAI LLM adapter behavior.",
+    "layer": "tests",
+    "flow": "openai_llm_adapter_validation",
+    "header_fields": {
+      "ROLE": "Verify optional OpenAI LLM adapter behavior.",
+      "LAYER": "tests",
+      "FLOW": "openai_llm_adapter_validation",
+      "INPUTS": [
+        "provider-neutral LlmRequest records",
+        "fake OpenAI SDK client objects",
+        "fake OpenAI Responses API response objects",
+        "fake usage metadata objects",
+        "optional client factories"
+      ],
+      "OUTPUTS": [
+        "OpenAI adapter behavior assertions",
+        "provider-neutral LlmResponse assertions",
+        "request conversion assertions",
+        "response extraction assertions",
+        "unavailable-client error assertions"
+      ],
+      "UPSTREAM": [
+        "OpenAI client adapter",
+        "LLM client boundary",
+        "future generated answer service integration",
+        "future provider configuration wiring"
+      ],
+      "DOWNSTREAM": [
+        "local test runs",
+        "future CI guardrails",
+        "future API ask LLM integration tests",
+        "future CLI ask LLM integration tests",
+        "system map review"
+      ],
+      "OWNS": [
+        "OpenAI adapter unit tests",
+        "fake client invocation tests",
+        "OpenAI request shape tests",
+        "OpenAI response conversion tests",
+        "missing SDK guardrail tests"
+      ],
+      "DOES_NOT_OWN": [
+        "OpenAI SDK integration tests",
+        "real network tests",
+        "prompt construction tests",
+        "retrieval tests",
+        "verifier tests",
+        "stale-index refusal tests",
+        "API route tests",
+        "CLI tests"
+      ],
+      "SIDE_EFFECTS": [
+        "fake clients capture in-memory request payloads",
+        "one test monkeypatches Python import behavior"
+      ],
+      "STATE": {
+        "reads": [
+          "in-memory test values"
+        ],
+        "writes": [
+          "in-memory fake client request capture"
+        ]
+      },
+      "NOTES": [
+        "These tests do not require the OpenAI package.",
+        "These tests do not call the network.",
+        "Real provider integration should remain behind this adapter."
+      ]
+    },
+    "imports": [
+      "__future__",
+      "builtins",
+      "code_context.llm",
+      "code_context.openai_client",
+      "pytest",
+      "typing"
+    ],
+    "internal_imports": [
+      "code_context.llm",
+      "code_context.openai_client"
+    ],
+    "classes": [
+      "FakeUsageObject",
+      "FakeOpenAiResponse",
+      "FakeResponsesResource",
+      "FakeOpenAiSdkClient"
+    ],
+    "functions": [
+      "test_openai_llm_client_calls_responses_api_and_returns_provider_neutral_response",
+      "test_openai_llm_client_converts_messages_to_openai_input_items",
+      "test_openai_llm_client_uses_request_model_when_response_model_is_missing",
+      "test_openai_llm_client_extracts_usage_from_mapping",
+      "test_openai_llm_client_rejects_missing_output_text",
+      "test_build_openai_llm_client_uses_injected_client_factory_without_importing_sdk",
+      "test_build_openai_llm_client_allows_sdk_to_read_environment_when_api_key_is_not_passed",
+      "test_build_openai_llm_client_raises_clear_error_when_openai_sdk_is_missing",
+      "_request"
+    ],
+    "warnings": []
+  },
+  {
     "path": "tests/test_pipeline.py",
     "role": "Verify repository indexing pipeline behavior from scan to chunks to saved snapshot.",
     "layer": "tests",
@@ -3823,6 +3925,102 @@
     "functions": [
       "build_disabled_llm_client",
       "build_usage_metadata"
+    ],
+    "warnings": []
+  },
+  {
+    "path": "src/code_context/openai_client.py",
+    "role": "Adapt the OpenAI Responses API to the provider-neutral LLM client boundary.",
+    "layer": "llm",
+    "flow": "openai_llm_adapter",
+    "header_fields": {
+      "ROLE": "Adapt the OpenAI Responses API to the provider-neutral LLM client boundary.",
+      "LAYER": "llm",
+      "FLOW": "openai_llm_adapter",
+      "INPUTS": [
+        "provider-neutral LlmRequest records",
+        "optional OpenAI SDK client instances",
+        "optional OpenAI API keys",
+        "OpenAI Responses API response objects"
+      ],
+      "OUTPUTS": [
+        "provider-neutral LlmResponse records",
+        "OpenAiLlmClient instances",
+        "clear unavailable-client errors when the OpenAI SDK is not installed",
+        "clear response-shape errors when provider output is missing text"
+      ],
+      "UPSTREAM": [
+        "LLM client boundary",
+        "AppConfig provider settings",
+        "future grounded answer generation service integration",
+        "future API and CLI LLM configuration wiring",
+        "local tests with fake OpenAI clients"
+      ],
+      "DOWNSTREAM": [
+        "future generated ask responses",
+        "future FastAPI ask LLM integration",
+        "future CLI ask LLM integration",
+        "future provider configuration documentation"
+      ],
+      "OWNS": [
+        "OpenAI Responses API adapter behavior",
+        "OpenAI client construction helper",
+        "provider-neutral request to OpenAI request conversion",
+        "OpenAI response text extraction",
+        "OpenAI usage metadata extraction",
+        "OpenAI response model fallback behavior"
+      ],
+      "DOES_NOT_OWN": [
+        "prompt construction",
+        "answer generation orchestration",
+        "retrieval scoring",
+        "retrieval sufficiency decisions",
+        "stale-index refusal",
+        "API routing",
+        "CLI argument parsing",
+        "LangGraph workflow routing",
+        "environment variable parsing"
+      ],
+      "SIDE_EFFECTS": [
+        "build_openai_llm_client may import the OpenAI SDK",
+        "OpenAiLlmClient.complete calls the injected OpenAI client"
+      ],
+      "STATE": {
+        "reads": [
+          "OpenAI SDK availability when build_openai_llm_client is called without a client factory",
+          "OpenAI environment configuration through the SDK when no API key is passed"
+        ],
+        "writes": [
+          "none"
+        ]
+      },
+      "NOTES": [
+        "This adapter is optional and is not wired into API or CLI yet.",
+        "Tests use fake clients and do not make network calls.",
+        "Keep this adapter behind the LlmClient protocol so provider details do not leak into prompt or answer generation code."
+      ]
+    },
+    "imports": [
+      "__future__",
+      "code_context.llm",
+      "collections.abc",
+      "typing"
+    ],
+    "internal_imports": [
+      "code_context.llm"
+    ],
+    "classes": [
+      "OpenAiClientUnavailableError",
+      "OpenAiResponseError",
+      "OpenAiLlmClient"
+    ],
+    "functions": [
+      "build_openai_llm_client",
+      "_load_openai_client_factory",
+      "_to_openai_input",
+      "_extract_output_text",
+      "_extract_response_model",
+      "_extract_usage"
     ],
     "warnings": []
   },
