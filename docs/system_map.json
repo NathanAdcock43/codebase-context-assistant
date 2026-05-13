@@ -2207,10 +2207,14 @@
         "developer question text",
         "retrieval thresholds",
         "modified source files that make indexed context stale",
-        "monkeypatched optional workflow adapter calls"
+        "monkeypatched optional workflow adapter calls",
+        "fake LLM clients for generated answer checks"
       ],
       "OUTPUTS": [
-        "ask workflow service behavior assertions"
+        "ask workflow service behavior assertions",
+        "stale-index LLM guardrail assertions",
+        "insufficient-context LLM guardrail assertions",
+        "generated answer metadata assertions"
       ],
       "UPSTREAM": [
         "ask workflow orchestration service",
@@ -2218,13 +2222,15 @@
         "repository scanner",
         "drift detector",
         "IndexSnapshot model",
-        "SourceChunk model"
+        "SourceChunk model",
+        "LLM client boundary",
+        "grounded answer generation service"
       ],
       "DOWNSTREAM": [
         "local test runs",
         "future CI guardrails",
         "FastAPI ask endpoint",
-        "future CLI ask command",
+        "CLI ask command",
         "future demo scripts",
         "system map review"
       ],
@@ -2232,21 +2238,26 @@
         "ask service grounded answer tests",
         "ask service insufficient-context tests",
         "ask service stale-index refusal tests",
-        "ask service optional LangGraph adapter invocation tests"
+        "ask service optional LangGraph adapter invocation tests",
+        "ask service generated answer tests",
+        "ask service LLM guardrail tests"
       ],
       "DOES_NOT_OWN": [
         "API route tests",
+        "CLI route tests",
         "standalone scanner tests",
         "standalone chunker tests",
         "standalone drift tests",
         "standalone retrieval service tests",
         "standalone LangGraph adapter tests",
-        "LLM response tests"
+        "OpenAI SDK tests",
+        "real provider network tests"
       ],
       "SIDE_EFFECTS": [
         "writes temporary source files through pytest tmp_path",
         "modifies temporary source files to make indexed context stale",
-        "monkeypatches the ask workflow adapter during one test"
+        "monkeypatches the ask workflow adapter during one test",
+        "fake LLM clients capture in-memory requests"
       ],
       "STATE": {
         "reads": [
@@ -2254,34 +2265,44 @@
           "in-memory test snapshots"
         ],
         "writes": [
-          "temporary repository files"
+          "temporary repository files",
+          "in-memory fake LLM request capture"
         ]
       },
       "NOTES": [
         "These tests keep ask orchestration reusable outside FastAPI.",
-        "API tests should only verify HTTP response shaping after this service exists."
+        "API tests should verify HTTP request and response shaping after this service exists.",
+        "Generated answer tests do not call a real provider."
       ]
     },
     "imports": [
       "__future__",
       "code_context.agent.state",
       "code_context.ask",
+      "code_context.llm",
       "code_context.models",
       "code_context.scanner",
       "pathlib",
-      "pytest"
+      "pytest",
+      "typing"
     ],
     "internal_imports": [
       "code_context.agent.state",
       "code_context.ask",
+      "code_context.llm",
       "code_context.models",
       "code_context.scanner"
     ],
-    "classes": [],
+    "classes": [
+      "FakeLlmClient"
+    ],
     "functions": [
       "test_ask_indexed_code_question_returns_grounded_result",
+      "test_ask_indexed_code_question_can_generate_grounded_answer_with_injected_llm_client",
       "test_ask_indexed_code_question_returns_insufficient_context",
+      "test_ask_indexed_code_question_does_not_call_llm_when_context_is_insufficient",
       "test_ask_indexed_code_question_refuses_when_snapshot_is_stale",
+      "test_ask_indexed_code_question_does_not_call_llm_when_snapshot_is_stale",
       "test_ask_indexed_code_question_passes_settings_to_optional_workflow_adapter",
       "_snapshot",
       "_file_metadata",
@@ -3899,16 +3920,20 @@
         "retrieval score thresholds",
         "retrieval sufficiency thresholds",
         "current repository files for stale-index checks",
-        "optional LangGraph runtime availability through the workflow adapter"
+        "optional LangGraph runtime availability through the workflow adapter",
+        "optional LLM generation request",
+        "optional injected LLM client",
+        "optional LLM model override"
       ],
       "OUTPUTS": [
-        "AskWorkflowResult records with grounded answers, stale-index refusals, or insufficient-context refusals",
+        "AskWorkflowResult records with grounded answers, stale-index refusals, insufficient-context refusals, or optional generated answers",
         "grounded SearchResult records when context is sufficient",
-        "agent step status records when workflow execution reaches the agent"
+        "agent step status records when workflow execution reaches the agent",
+        "optional LLM provider metadata when a generated answer is requested and produced"
       ],
       "UPSTREAM": [
         "FastAPI ask endpoint",
-        "future CLI ask command",
+        "CLI ask command",
         "future demo scripts",
         "future LangGraph workflow callers"
       ],
@@ -3918,7 +3943,9 @@
         "optional LangGraph workflow adapter",
         "deterministic agent workflow fallback",
         "agent state models",
-        "retrieval result models"
+        "retrieval result models",
+        "configured LLM client factory",
+        "grounded answer generation service"
       ],
       "OWNS": [
         "ask workflow orchestration",
@@ -3926,26 +3953,32 @@
         "stale-index refusal construction",
         "optional LangGraph adapter invocation",
         "confidence classification for ask results",
-        "reusable ask result shape for API and future CLI callers"
+        "reusable ask result shape for API and CLI callers",
+        "optional generated answer orchestration after grounding checks pass",
+        "guardrails that prevent LLM calls when context is stale or insufficient"
       ],
       "DOES_NOT_OWN": [
         "HTTP request and response DTOs",
         "API routing",
+        "CLI argument parsing",
         "repository traversal internals",
         "file hashing internals",
         "drift comparison internals",
         "retrieval scoring",
         "agent node behavior",
         "LangGraph graph construction",
-        "LLM prompting"
+        "prompt formatting internals",
+        "provider-specific SDK calls"
       ],
       "SIDE_EFFECTS": [
-        "reads repository files through scanner for stale-index detection"
+        "reads repository files through scanner for stale-index detection",
+        "may call an injected or configured LLM client when use_llm is true and context is grounded"
       ],
       "STATE": {
         "reads": [
           "local repository files",
-          "in-memory IndexSnapshot records"
+          "in-memory IndexSnapshot records",
+          "process environment when a configured LLM client or default model is needed"
         ],
         "writes": [
           "none"
@@ -3954,6 +3987,7 @@
       "NOTES": [
         "Keep ask orchestration independent from FastAPI so CLI and API can share it.",
         "Refuse before running the agent workflow when indexed context is stale.",
+        "Do not call an LLM when retrieval or verification says context is insufficient.",
         "The optional LangGraph adapter owns fallback to the deterministic workflow when LangGraph is unavailable."
       ]
     },
@@ -3961,17 +3995,26 @@
       "__future__",
       "code_context.agent.langgraph_graph",
       "code_context.agent.state",
+      "code_context.answer_generation",
+      "code_context.config",
       "code_context.drift",
+      "code_context.llm",
+      "code_context.llm_factory",
       "code_context.models",
       "code_context.retrieval",
       "code_context.scanner",
       "pathlib",
-      "pydantic"
+      "pydantic",
+      "typing"
     ],
     "internal_imports": [
       "code_context.agent.langgraph_graph",
       "code_context.agent.state",
+      "code_context.answer_generation",
+      "code_context.config",
       "code_context.drift",
+      "code_context.llm",
+      "code_context.llm_factory",
       "code_context.models",
       "code_context.retrieval",
       "code_context.scanner"
@@ -3981,8 +4024,13 @@
     ],
     "functions": [
       "ask_indexed_code_question",
+      "build_generated_ask_result",
       "detect_snapshot_drift",
-      "build_stale_ask_result"
+      "build_stale_ask_result",
+      "_generated_answer_text",
+      "_generated_answer_provider",
+      "_generated_answer_model",
+      "_generated_answer_usage"
     ],
     "warnings": []
   },

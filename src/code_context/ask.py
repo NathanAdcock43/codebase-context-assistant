@@ -13,15 +13,19 @@ INPUTS:
 - retrieval sufficiency thresholds
 - current repository files for stale-index checks
 - optional LangGraph runtime availability through the workflow adapter
+- optional LLM generation request
+- optional injected LLM client
+- optional LLM model override
 
 OUTPUTS:
-- AskWorkflowResult records with grounded answers, stale-index refusals, or insufficient-context refusals
+- AskWorkflowResult records with grounded answers, stale-index refusals, insufficient-context refusals, or optional generated answers
 - grounded SearchResult records when context is sufficient
 - agent step status records when workflow execution reaches the agent
+- optional LLM provider metadata when a generated answer is requested and produced
 
 UPSTREAM:
 - FastAPI ask endpoint
-- future CLI ask command
+- CLI ask command
 - future demo scripts
 - future LangGraph workflow callers
 
@@ -32,6 +36,8 @@ DOWNSTREAM:
 - deterministic agent workflow fallback
 - agent state models
 - retrieval result models
+- configured LLM client factory
+- grounded answer generation service
 
 OWNS:
 - ask workflow orchestration
@@ -39,48 +45,61 @@ OWNS:
 - stale-index refusal construction
 - optional LangGraph adapter invocation
 - confidence classification for ask results
-- reusable ask result shape for API and future CLI callers
+- reusable ask result shape for API and CLI callers
+- optional generated answer orchestration after grounding checks pass
+- guardrails that prevent LLM calls when context is stale or insufficient
 
 DOES_NOT_OWN:
 - HTTP request and response DTOs
 - API routing
+- CLI argument parsing
 - repository traversal internals
 - file hashing internals
 - drift comparison internals
 - retrieval scoring
 - agent node behavior
 - LangGraph graph construction
-- LLM prompting
+- prompt formatting internals
+- provider-specific SDK calls
 
 SIDE_EFFECTS:
 - reads repository files through scanner for stale-index detection
+- may call an injected or configured LLM client when use_llm is true and context is grounded
 
 STATE:
   reads:
     - local repository files
     - in-memory IndexSnapshot records
+    - process environment when a configured LLM client or default model is needed
   writes:
     - none
 
 NOTES:
 - Keep ask orchestration independent from FastAPI so CLI and API can share it.
 - Refuse before running the agent workflow when indexed context is stale.
+- Do not call an LLM when retrieval or verification says context is insufficient.
 - The optional LangGraph adapter owns fallback to the deterministic workflow when LangGraph is unavailable.
 """
 
 from pathlib import Path
+from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from code_context.agent.langgraph_graph import run_code_question_workflow_with_optional_langgraph
 from code_context.agent.state import AgentStep
+from code_context.answer_generation import generate_grounded_answer
+from code_context.config import load_app_config
 from code_context.drift import detect_drift
+from code_context.llm import LlmClient
+from code_context.llm_factory import build_configured_llm_client
 from code_context.models import DriftReport, IndexSnapshot, SearchResult
 from code_context.retrieval import DEFAULT_MINIMUM_TOP_SCORE, DEFAULT_RETRIEVAL_MIN_SCORE
 from code_context.scanner import scan_repository
 
 
 ASK_STALE_INDEX_REFUSAL = "Indexed context is stale. Re-index the repository before asking questions."
+LLM_GENERATED_CONFIDENCE = "grounded_generated"
 
 
 class AskWorkflowResult(BaseModel):
@@ -94,6 +113,10 @@ class AskWorkflowResult(BaseModel):
     citations: list[str]
     sources: list[SearchResult]
     steps: list[AgentStep]
+    is_llm_generated: bool = False
+    llm_provider: str | None = None
+    llm_model: str | None = None
+    llm_usage: dict[str, int] = Field(default_factory=dict)
 
 
 def ask_indexed_code_question(
@@ -105,6 +128,10 @@ def ask_indexed_code_question(
     minimum_results: int = 1,
     minimum_top_score: float = DEFAULT_MINIMUM_TOP_SCORE,
     prefer_langgraph: bool = True,
+    use_llm: bool = False,
+    llm_client: LlmClient | None = None,
+    llm_model: str | None = None,
+    llm_temperature: float = 0.0,
 ) -> AskWorkflowResult:
     """Answer a code question against an index snapshot or return a refusal."""
     drift_report = detect_snapshot_drift(snapshot)
@@ -128,7 +155,7 @@ def ask_indexed_code_question(
     insufficient_reason = None if is_grounded else verification.reason if verification else None
     sources = state.retrieval.results if state.retrieval else []
 
-    return AskWorkflowResult(
+    result = AskWorkflowResult(
         question=state.question,
         answer=state.answer or "",
         confidence=confidence,
@@ -139,6 +166,50 @@ def ask_indexed_code_question(
         citations=state.citations,
         sources=sources,
         steps=state.steps,
+    )
+
+    if not use_llm or not is_grounded:
+        return result
+
+    return build_generated_ask_result(
+        result=result,
+        llm_client=llm_client,
+        llm_model=llm_model,
+        llm_temperature=llm_temperature,
+    )
+
+
+def build_generated_ask_result(
+    *,
+    result: AskWorkflowResult,
+    llm_client: LlmClient | None = None,
+    llm_model: str | None = None,
+    llm_temperature: float = 0.0,
+) -> AskWorkflowResult:
+    """Generate a grounded answer from already-verified source context."""
+    if not result.sources:
+        return result
+
+    resolved_client = llm_client or build_configured_llm_client()
+    resolved_model = llm_model or load_app_config().openai_model
+
+    generated_answer = generate_grounded_answer(
+        question=result.question,
+        results=result.sources,
+        client=resolved_client,
+        model=resolved_model,
+        temperature=llm_temperature,
+    )
+
+    return result.model_copy(
+        update={
+            "answer": _generated_answer_text(generated_answer),
+            "confidence": LLM_GENERATED_CONFIDENCE,
+            "is_llm_generated": True,
+            "llm_provider": _generated_answer_provider(generated_answer),
+            "llm_model": _generated_answer_model(generated_answer, fallback_model=resolved_model),
+            "llm_usage": _generated_answer_usage(generated_answer),
+        }
     )
 
 
@@ -165,3 +236,38 @@ def build_stale_ask_result(question: str) -> AskWorkflowResult:
         sources=[],
         steps=[],
     )
+
+
+def _generated_answer_text(generated_answer: Any) -> str:
+    answer = getattr(generated_answer, "answer", None)
+    if isinstance(answer, str):
+        return answer
+
+    content = getattr(generated_answer, "content", None)
+    if isinstance(content, str):
+        return content
+
+    return str(generated_answer)
+
+
+def _generated_answer_provider(generated_answer: Any) -> str | None:
+    provider = getattr(generated_answer, "provider", None)
+    return provider if isinstance(provider, str) else None
+
+
+def _generated_answer_model(generated_answer: Any, *, fallback_model: str) -> str:
+    model = getattr(generated_answer, "model", None)
+    return model if isinstance(model, str) and model else fallback_model
+
+
+def _generated_answer_usage(generated_answer: Any) -> dict[str, int]:
+    usage = getattr(generated_answer, "usage", None)
+    if not isinstance(usage, dict):
+        return {}
+
+    normalized_usage: dict[str, int] = {}
+    for key, value in usage.items():
+        if isinstance(key, str) and isinstance(value, int):
+            normalized_usage[key] = value
+
+    return normalized_usage
