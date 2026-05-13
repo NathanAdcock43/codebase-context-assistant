@@ -2265,6 +2265,82 @@
     "warnings": []
   },
   {
+    "path": "tests/test_demo_docs.py",
+    "role": "Verify demo documentation for the local CLI workflow.",
+    "layer": "tests",
+    "flow": "demo_documentation_validation",
+    "header_fields": {
+      "ROLE": "Verify demo documentation for the local CLI workflow.",
+      "LAYER": "tests",
+      "FLOW": "demo_documentation_validation",
+      "INPUTS": [
+        "docs/demo_script.md content",
+        "expected CLI command examples",
+        "expected stale-index demo language",
+        "expected honest limitation language"
+      ],
+      "OUTPUTS": [
+        "documentation content assertions"
+      ],
+      "UPSTREAM": [
+        "demo documentation",
+        "CLI index command",
+        "CLI ask command",
+        "CLI drift command",
+        "ask workflow stale-index refusal behavior"
+      ],
+      "DOWNSTREAM": [
+        "local test runs",
+        "future CI guardrails",
+        "README and packaging polish",
+        "interview demo preparation",
+        "system map review"
+      ],
+      "OWNS": [
+        "demo script smoke tests",
+        "expected local CLI command coverage",
+        "stale-index demo coverage",
+        "limitation wording coverage"
+      ],
+      "DOES_NOT_OWN": [
+        "CLI behavior tests",
+        "API behavior tests",
+        "scanner tests",
+        "retrieval tests",
+        "drift detector tests",
+        "LangGraph adapter tests",
+        "LLM response tests"
+      ],
+      "SIDE_EFFECTS": [
+        "reads docs/demo_script.md"
+      ],
+      "STATE": {
+        "reads": [
+          "docs/demo_script.md"
+        ],
+        "writes": [
+          "none"
+        ]
+      },
+      "NOTES": [
+        "These tests are intentionally light.",
+        "They protect the demo path from being accidentally removed during documentation edits."
+      ]
+    },
+    "imports": [
+      "__future__",
+      "pathlib"
+    ],
+    "internal_imports": [],
+    "classes": [],
+    "functions": [
+      "test_demo_script_documents_cli_index_ask_and_drift_commands",
+      "test_demo_script_documents_stale_index_refusal_flow",
+      "test_demo_script_keeps_limitations_honest"
+    ],
+    "warnings": []
+  },
+  {
     "path": "tests/test_drift.py",
     "role": "Verify drift detection between indexed file metadata and current scanned file metadata.",
     "layer": "tests",
