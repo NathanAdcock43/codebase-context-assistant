@@ -2600,6 +2600,85 @@
     "warnings": []
   },
   {
+    "path": "tests/test_local_setup_docs.py",
+    "role": "Verify local setup documentation for GitHub-oriented project packaging.",
+    "layer": "tests",
+    "flow": "local_setup_documentation_validation",
+    "header_fields": {
+      "ROLE": "Verify local setup documentation for GitHub-oriented project packaging.",
+      "LAYER": "tests",
+      "FLOW": "local_setup_documentation_validation",
+      "INPUTS": [
+        "docs/local_setup.md content",
+        "expected local setup commands",
+        "expected CLI workflow commands",
+        "expected API workflow commands",
+        "expected limitation language"
+      ],
+      "OUTPUTS": [
+        "documentation content assertions"
+      ],
+      "UPSTREAM": [
+        "local setup documentation",
+        "CLI index command",
+        "CLI ask command",
+        "CLI drift command",
+        "FastAPI app",
+        "demo script"
+      ],
+      "DOWNSTREAM": [
+        "local test runs",
+        "future CI guardrails",
+        "README packaging polish",
+        "GitHub project presentation",
+        "system map review"
+      ],
+      "OWNS": [
+        "local setup documentation smoke tests",
+        "expected setup command coverage",
+        "expected CLI command coverage",
+        "expected API command coverage",
+        "honest limitation wording coverage"
+      ],
+      "DOES_NOT_OWN": [
+        "CLI behavior tests",
+        "API behavior tests",
+        "demo script tests",
+        "scanner tests",
+        "retrieval tests",
+        "drift detector tests",
+        "LangGraph adapter tests"
+      ],
+      "SIDE_EFFECTS": [
+        "reads docs/local_setup.md"
+      ],
+      "STATE": {
+        "reads": [
+          "docs/local_setup.md"
+        ],
+        "writes": [
+          "none"
+        ]
+      },
+      "NOTES": [
+        "These tests are intentionally light.",
+        "They protect the local setup guide from losing the minimum commands needed by a new reader."
+      ]
+    },
+    "imports": [
+      "__future__",
+      "pathlib"
+    ],
+    "internal_imports": [],
+    "classes": [],
+    "functions": [
+      "test_local_setup_documents_environment_and_validation_commands",
+      "test_local_setup_documents_cli_and_api_workflows",
+      "test_local_setup_keeps_current_limitations_honest"
+    ],
+    "warnings": []
+  },
+  {
     "path": "tests/test_pipeline.py",
     "role": "Verify repository indexing pipeline behavior from scan to chunks to saved snapshot.",
     "layer": "tests",
