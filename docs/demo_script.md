@@ -2,7 +2,7 @@
 
 This demo shows the current local workflow for the AI Codebase Context Assistant.
 
-The project is still intentionally small and local. The current workflow does not call an LLM yet. It demonstrates the foundation that makes later LLM answers safer:
+The project is still intentionally small and local. Deterministic answers remain the default, and generated answers are opt-in after stale-index and grounding checks pass. It demonstrates the foundation that makes LLM answers safer:
 
 1. scan a local repository
 2. chunk source files with line references
@@ -11,6 +11,7 @@ The project is still intentionally small and local. The current workflow does no
 5. answer only from grounded context
 6. refuse when context is stale or insufficient
 7. show a planner, retriever, verifier, responder workflow
+8. optionally generate an answer through a configured OpenAI client
 
 ## Demo setup
 
@@ -43,7 +44,7 @@ This proves the scanner, chunker, index store, drift detector, retrieval service
 
 Expected result:
 
-    Scanned 33 source files.
+    Scanned ... source files.
     Wrote docs\system_map.md
     Wrote docs\system_map.json
 
@@ -56,9 +57,9 @@ The system map is part of the project discipline. It helps keep the codebase exp
 Expected output shape:
 
     Indexed repository:
-    Join-Path $RepoPath ".code_context_index"
+    <repo path>
 
-    Index path: .code_context_index\code_context_index.json
+    Index path: <index path>
     Indexed at: ...
     File count: ...
     Chunk count: ...
@@ -194,6 +195,43 @@ Useful endpoints:
     POST /ask
     POST /drift
 
+### Optional API generated-answer smoke
+
+Generated answers require OpenAI environment settings to be available to the API process before starting Uvicorn. Do not commit secrets.
+
+In FastAPI docs, use `POST /ask` with a request like this after the repository has been indexed:
+
+```json
+{
+  "index_dir": ".code_context_index",
+  "question": "Where is the CLI generated answer opt-in implemented?",
+  "limit": 8,
+  "use_llm": true,
+  "llm_temperature": 0
+}
+```
+
+Expected response shape:
+
+```json
+{
+  "confidence": "grounded_generated",
+  "is_grounded": true,
+  "is_stale": false,
+  "is_llm_generated": true,
+  "llm_provider": "openai",
+  "sources": [
+    {
+      "relative_path": "src/code_context/cli.py"
+    }
+  ]
+}
+```
+
+What to say:
+
+    The API generated-answer path is still guarded. The service checks for stale indexed context first, then retrieves and verifies grounded context, and only then calls the configured LLM.
+
 ## Demo talk track
 
 Use this simple explanation:
@@ -202,12 +240,12 @@ Use this simple explanation:
 
     The system scans the repository, stores file hashes and line-preserving chunks, retrieves relevant code context, verifies whether the retrieved context is enough, and refuses when it cannot answer safely.
 
-    The current version uses a deterministic local retrieval baseline and an optional LangGraph adapter around the planner, retriever, verifier, and responder workflow. The next natural step is to add LLM answer generation after the verifier, while preserving the same grounding and stale-index refusal behavior.
+    The current version uses a deterministic local retrieval baseline, an optional LangGraph adapter around the planner, retriever, verifier, and responder workflow, and optional generated answers after verification. The important part is that generated answers do not bypass grounding or stale-index refusal.
 
 ## Current honest limitations
 
-- The current answer text is deterministic and basic.
-- The project does not call an LLM yet.
+- Deterministic answer text is intentionally basic.
+- Generated answers are optional and require OpenAI configuration.
 - The current vector search is a local deterministic baseline, not ChromaDB yet.
 - The project is local-only and single-user.
 - The current chunking is line-based rather than AST-aware.

@@ -6,7 +6,7 @@ The project scans a repository, stores file metadata and line-preserving source 
 
     How can AI help a developer understand a codebase without drifting away from the actual code?
 
-The current version is intentionally local-first and explainable. It does not call an LLM yet. It proves the foundation first: indexing, retrieval, grounding, refusal behavior, stale-index detection, FastAPI endpoints, CLI commands, and an optional LangGraph adapter.
+The current version is intentionally local-first and explainable. It defaults to deterministic answers, and generated answers are opt-in through the CLI or API after stale-index and grounding checks pass. It proves the foundation first: indexing, retrieval, grounding, refusal behavior, stale-index detection, FastAPI endpoints, CLI commands, optional generated answers, and an optional LangGraph adapter.
 
 ## Current capabilities
 
@@ -26,6 +26,8 @@ The project can currently:
 - expose workflows through FastAPI
 - run local index, ask, and drift commands through the CLI
 - route ask workflow execution through an optional LangGraph adapter with deterministic fallback
+- optionally call a configured OpenAI LLM after stale-index and grounding checks pass
+- downgrade generated self-refusals when the supplied context is insufficient
 
 ## Current architecture
 
@@ -72,6 +74,7 @@ Key modules:
 
 Optional:
 
+- OpenAI API key and OpenAI Python SDK for generated answers
 - GitKraken or another Git client
 - Postman or FastAPI Swagger UI
 - PyCharm, IntelliJ, VS Code, or another editor
@@ -95,6 +98,10 @@ Install locally:
 
     .\.venv\Scripts\python.exe -m pip install --upgrade pip
     .\.venv\Scripts\python.exe -m pip install -e .
+
+Install with optional OpenAI support if you want generated answers:
+
+    .\.venv\Scripts\python.exe -m pip install -e ".[openai]"
 
 Run tests:
 
@@ -123,6 +130,10 @@ Ask a grounded question:
 
     py -3.13 -m code_context.cli ask --index-dir $IndexDir --question "Where is the ask workflow implemented?" --no-langgraph
 
+Ask with an optional generated answer after loading OpenAI environment settings:
+
+    py -3.13 -m code_context.cli ask --index-dir $IndexDir --question "Where is the CLI generated answer opt-in implemented?" --limit 8 --no-langgraph --use-llm --llm-temperature 0
+
 Check whether the index is stale:
 
     py -3.13 -m code_context.cli drift --index-dir $IndexDir
@@ -149,6 +160,20 @@ Current endpoints:
 - `POST /retrieve`
 - `POST /ask`
 - `POST /drift`
+
+Optional generated-answer `/ask` request shape:
+
+```json
+{
+  "index_dir": ".code_context_index",
+  "question": "Where is the CLI generated answer opt-in implemented?",
+  "limit": 8,
+  "use_llm": true,
+  "llm_temperature": 0
+}
+```
+
+Generated answers still use the same stale-index and grounding checks before the provider is called.
 
 ## Demo
 
@@ -182,8 +207,8 @@ Good demo questions:
 
 ## Current limitations
 
-- The project does not call an LLM yet.
-- The current answer text is deterministic and basic.
+- Generated answers are optional and require OpenAI configuration.
+- Deterministic answer text is intentionally basic.
 - The current vector search is a local deterministic baseline, not ChromaDB yet.
 - The project is local-only and single-user.
 - The current chunking is line-based rather than AST-aware.
@@ -195,13 +220,11 @@ Good demo questions:
 
 Near-term improvements:
 
-- add configurable LLM answer generation after verification
-- preserve stale-index refusal before any LLM call
-- preserve citations and source references in generated answers
 - add ChromaDB-backed vector storage
-- improve README and demo polish after LLM integration
-- add `.env.example` for LLM provider settings
 - add a small sample repository or fixture for demos
+- improve generated-answer citation verification
+- improve API demo examples
+- add Docker packaging when local setup is stable
 
 Later improvements:
 
