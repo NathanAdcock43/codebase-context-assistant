@@ -14,6 +14,7 @@
         "indexed chunk search requests",
         "grounded retrieval requests",
         "ask requests routed through the reusable ask workflow service",
+        "optional generated-answer ask requests",
         "drift detection requests"
       ],
       "OUTPUTS": [
@@ -21,7 +22,8 @@
         "index summary responses",
         "search result responses with grounded file and line references",
         "retrieval responses with sufficiency decisions",
-        "ask responses with grounded answers, stale-index refusals, or insufficient-context refusals",
+        "ask responses with grounded answers, stale-index refusals, insufficient-context refusals, or optional generated answers",
+        "optional LLM metadata on ask responses",
         "drift report responses"
       ],
       "UPSTREAM": [
@@ -45,7 +47,8 @@
         "endpoint orchestration",
         "HTTP error handling for missing indexes",
         "local API route definitions",
-        "API response shaping for ask results"
+        "API response shaping for ask results",
+        "API opt-in fields for generated ask answers"
       ],
       "DOES_NOT_OWN": [
         "repository traversal",
@@ -58,19 +61,22 @@
         "ask workflow orchestration",
         "optional LangGraph workflow behavior",
         "deterministic agent workflow behavior",
-        "LLM prompting"
+        "prompt formatting",
+        "provider-specific SDK calls"
       ],
       "SIDE_EFFECTS": [
         "/index reads repository files and writes a local JSON index",
         "/search reads a local JSON index",
         "/retrieve reads a local JSON index",
         "/ask reads a local JSON index and repository files through the ask service",
+        "/ask may call a configured LLM client when use_llm is true and ask service guardrails pass",
         "/drift reads repository files and a local JSON index"
       ],
       "STATE": {
         "reads": [
           "local repository files",
-          "local JSON index file"
+          "local JSON index file",
+          "process environment through ask service when generated answers are requested"
         ],
         "writes": [
           "local JSON index file through /index"
@@ -78,8 +84,8 @@
       },
       "NOTES": [
         "Keep endpoints thin and delegate core behavior to existing modules.",
-        "Ask delegates stale-index checks and workflow execution to the reusable ask service.",
-        "This API still exposes grounded workflow answers, not LLM-generated answers yet."
+        "Ask delegates stale-index checks, workflow execution, and optional generated answers to the reusable ask service.",
+        "API ask defaults to deterministic grounded workflow answers unless use_llm is explicitly true."
       ]
     },
     "imports": [
@@ -87,6 +93,7 @@
       "code_context.ask",
       "code_context.drift",
       "code_context.index_store",
+      "code_context.llm",
       "code_context.models",
       "code_context.pipeline",
       "code_context.retrieval",
@@ -100,6 +107,7 @@
       "code_context.ask",
       "code_context.drift",
       "code_context.index_store",
+      "code_context.llm",
       "code_context.models",
       "code_context.pipeline",
       "code_context.retrieval",
@@ -2118,10 +2126,13 @@
         "temporary index directories",
         "HTTP index requests",
         "HTTP ask requests",
-        "monkeypatched ask workflow service"
+        "monkeypatched ask workflow service",
+        "optional generated-answer request fields"
       ],
       "OUTPUTS": [
-        "API routing behavior assertions for ask workflow execution"
+        "API routing behavior assertions for ask workflow execution",
+        "API generated-answer routing assertions",
+        "ask response LLM metadata shaping assertions"
       ],
       "UPSTREAM": [
         "FastAPI app implementation",
@@ -2140,7 +2151,8 @@
       "OWNS": [
         "ask endpoint workflow service routing tests",
         "API to ask service boundary tests",
-        "ask response shaping tests after service extraction"
+        "ask response shaping tests after service extraction",
+        "API opt-in generated answer routing tests"
       ],
       "DOES_NOT_OWN": [
         "standalone ask service tests",
@@ -2148,12 +2160,12 @@
         "deterministic agent workflow tests",
         "retrieval service unit tests",
         "drift endpoint tests",
-        "LLM response tests"
+        "real LLM provider tests"
       ],
       "SIDE_EFFECTS": [
         "writes temporary source files through pytest tmp_path",
         "writes temporary JSON index files through API calls",
-        "monkeypatches the API ask workflow service during the test"
+        "monkeypatches the API ask workflow service during tests"
       ],
       "STATE": {
         "reads": [
@@ -2167,7 +2179,8 @@
       },
       "NOTES": [
         "This test protects the seam between the API and the reusable ask service.",
-        "The ask service owns optional LangGraph routing and deterministic fallback behavior."
+        "The ask service owns optional LangGraph routing, deterministic fallback behavior, and generated answer guardrails.",
+        "These tests do not call a real LLM provider."
       ]
     },
     "imports": [
@@ -2177,7 +2190,8 @@
       "code_context.ask",
       "code_context.models",
       "fastapi.testclient",
-      "pathlib"
+      "pathlib",
+      "typing"
     ],
     "internal_imports": [
       "code_context.agent.state",
@@ -2187,7 +2201,8 @@
     ],
     "classes": [],
     "functions": [
-      "test_ask_endpoint_routes_through_ask_workflow_service"
+      "test_ask_endpoint_routes_through_ask_workflow_service",
+      "test_ask_endpoint_routes_generated_answer_request_fields_to_ask_service"
     ],
     "warnings": []
   },

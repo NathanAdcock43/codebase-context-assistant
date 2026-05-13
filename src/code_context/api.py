@@ -11,6 +11,7 @@ INPUTS:
 - indexed chunk search requests
 - grounded retrieval requests
 - ask requests routed through the reusable ask workflow service
+- optional generated-answer ask requests
 - drift detection requests
 
 OUTPUTS:
@@ -18,7 +19,8 @@ OUTPUTS:
 - index summary responses
 - search result responses with grounded file and line references
 - retrieval responses with sufficiency decisions
-- ask responses with grounded answers, stale-index refusals, or insufficient-context refusals
+- ask responses with grounded answers, stale-index refusals, insufficient-context refusals, or optional generated answers
+- optional LLM metadata on ask responses
 - drift report responses
 
 UPSTREAM:
@@ -43,6 +45,7 @@ OWNS:
 - HTTP error handling for missing indexes
 - local API route definitions
 - API response shaping for ask results
+- API opt-in fields for generated ask answers
 
 DOES_NOT_OWN:
 - repository traversal
@@ -55,26 +58,29 @@ DOES_NOT_OWN:
 - ask workflow orchestration
 - optional LangGraph workflow behavior
 - deterministic agent workflow behavior
-- LLM prompting
+- prompt formatting
+- provider-specific SDK calls
 
 SIDE_EFFECTS:
 - /index reads repository files and writes a local JSON index
 - /search reads a local JSON index
 - /retrieve reads a local JSON index
 - /ask reads a local JSON index and repository files through the ask service
+- /ask may call a configured LLM client when use_llm is true and ask service guardrails pass
 - /drift reads repository files and a local JSON index
 
 STATE:
   reads:
     - local repository files
     - local JSON index file
+    - process environment through ask service when generated answers are requested
   writes:
     - local JSON index file through /index
 
 NOTES:
 - Keep endpoints thin and delegate core behavior to existing modules.
-- Ask delegates stale-index checks and workflow execution to the reusable ask service.
-- This API still exposes grounded workflow answers, not LLM-generated answers yet.
+- Ask delegates stale-index checks, workflow execution, and optional generated answers to the reusable ask service.
+- API ask defaults to deterministic grounded workflow answers unless use_llm is explicitly true.
 """
 
 from pathlib import Path
@@ -85,6 +91,7 @@ from pydantic import BaseModel, Field, ValidationError
 from code_context.ask import ask_indexed_code_question
 from code_context.drift import detect_drift
 from code_context.index_store import DEFAULT_INDEX_FILENAME, JsonIndexStore
+from code_context.llm import LlmClientUnavailableError
 from code_context.models import IndexSnapshot, SearchResult
 from code_context.pipeline import index_repository
 from code_context.retrieval import (
@@ -166,6 +173,9 @@ class AskRequest(BaseModel):
     minimum_results: int = Field(default=1, ge=1)
     minimum_top_score: float = Field(default=DEFAULT_MINIMUM_TOP_SCORE, ge=0.0)
     index_filename: str = Field(default=DEFAULT_INDEX_FILENAME)
+    use_llm: bool = False
+    llm_model: str | None = None
+    llm_temperature: float = Field(default=0.0, ge=0.0, le=2.0)
 
 
 class AskSourceResponse(BaseModel):
@@ -194,6 +204,10 @@ class AskResponse(BaseModel):
     citations: list[str]
     sources: list[AskSourceResponse]
     steps: list[AskStepResponse]
+    is_llm_generated: bool = False
+    llm_provider: str | None = None
+    llm_model: str | None = None
+    llm_usage: dict[str, int] = Field(default_factory=dict)
 
 
 class DriftRequest(BaseModel):
@@ -309,12 +323,17 @@ def create_app() -> FastAPI:
                 minimum_results=request.minimum_results,
                 minimum_top_score=request.minimum_top_score,
                 prefer_langgraph=True,
+                use_llm=request.use_llm,
+                llm_model=request.llm_model,
+                llm_temperature=request.llm_temperature,
             )
         except FileNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         except NotADirectoryError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except ValidationError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except LlmClientUnavailableError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -337,6 +356,10 @@ def create_app() -> FastAPI:
                 )
                 for step in result.steps
             ],
+            is_llm_generated=result.is_llm_generated,
+            llm_provider=result.llm_provider,
+            llm_model=result.llm_model,
+            llm_usage=result.llm_usage,
         )
 
     @app.post("/drift")
