@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 """
-ROLE: Verify local CLI index, ask, and drift command behavior.
+ROLE: Verify local CLI index, ask, generated ask, and drift command behavior.
 LAYER: tests
 FLOW: cli_validation
 
@@ -12,12 +12,14 @@ INPUTS:
 - CLI argument lists
 - existing JSON index snapshots
 - modified source files that make indexed context stale
+- monkeypatched ask workflow service calls for generated-answer routing
 
 OUTPUTS:
 - CLI exit code assertions
 - CLI stdout assertions
 - CLI stderr assertions
 - persisted index assertions
+- generated-answer CLI routing assertions
 - terminal drift report assertions
 
 UPSTREAM:
@@ -37,6 +39,7 @@ DOWNSTREAM:
 OWNS:
 - CLI index command tests
 - CLI ask command tests
+- CLI generated-answer option tests
 - CLI drift command tests
 - terminal output formatting tests
 - missing repository error tests
@@ -51,12 +54,13 @@ DOES_NOT_OWN:
 - retrieval service tests
 - standalone drift detector tests
 - LangGraph adapter tests
-- LLM response tests
+- real LLM provider tests
 
 SIDE_EFFECTS:
 - writes temporary source files through pytest tmp_path
 - writes temporary JSON index files through CLI and indexing pipeline
 - modifies temporary source files to make indexed context stale
+- monkeypatches ask service in generated-answer routing tests
 - captures stdout and stderr through pytest
 
 STATE:
@@ -72,13 +76,18 @@ STATE:
 NOTES:
 - These tests keep the CLI thin and focused on service wiring.
 - Stale-index refusal is a successful CLI execution because the tool refused correctly.
+- Generated-answer CLI tests do not call a real LLM provider.
 - The index and drift commands give the project a simple terminal-first demo path.
 """
 
 from pathlib import Path
+from typing import Any
 
 from code_context import cli
+from code_context.agent.state import AgentStepStatus, create_initial_state
+from code_context.ask import AskWorkflowResult
 from code_context.index_store import JsonIndexStore
+from code_context.models import IndexSnapshot
 from code_context.pipeline import index_repository
 
 
@@ -227,9 +236,129 @@ def test_cli_ask_prints_grounded_answer_for_existing_index(
     assert "Confidence: grounded" in captured.out
     assert "Grounded: yes" in captured.out
     assert "Stale: no" in captured.out
+    assert "LLM generated: no" in captured.out
     assert "scanner.py" in captured.out
     assert "Workflow steps:" in captured.out
     assert captured.err == ""
+
+
+def test_cli_ask_routes_generated_answer_options_to_ask_service(
+    monkeypatch: Any,
+    capsys: Any,
+    tmp_path: Path,
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    source_file = repo / "scanner.py"
+    source_file.write_bytes(
+        b"def calculate_file_hash(path):\n"
+        b"    return hashlib.sha256(path.read_bytes()).hexdigest()\n"
+    )
+
+    index_dir = tmp_path / ".code_context_index"
+    index_repository(
+        repo,
+        index_dir=index_dir,
+        max_lines=10,
+        overlap_lines=0,
+    )
+    calls: dict[str, object] = {}
+
+    def fake_ask_service(
+        *,
+        question: str,
+        snapshot: IndexSnapshot,
+        limit: int,
+        min_score: float,
+        minimum_results: int,
+        minimum_top_score: float,
+        prefer_langgraph: bool,
+        use_llm: bool,
+        llm_model: str | None,
+        llm_temperature: float,
+    ) -> AskWorkflowResult:
+        calls["question"] = question
+        calls["snapshot"] = snapshot
+        calls["limit"] = limit
+        calls["min_score"] = min_score
+        calls["minimum_results"] = minimum_results
+        calls["minimum_top_score"] = minimum_top_score
+        calls["prefer_langgraph"] = prefer_langgraph
+        calls["use_llm"] = use_llm
+        calls["llm_model"] = llm_model
+        calls["llm_temperature"] = llm_temperature
+
+        state = create_initial_state(question)
+        completed_steps = [
+            step.model_copy(update={"status": AgentStepStatus.completed})
+            for step in state.steps
+        ]
+
+        return AskWorkflowResult(
+            question=question,
+            answer="fake generated CLI answer",
+            confidence="grounded_generated",
+            is_grounded=True,
+            is_stale=False,
+            insufficient_reason=None,
+            plan=["Use generated answer path."],
+            citations=["scanner.py:1-2"],
+            sources=[],
+            steps=completed_steps,
+            is_llm_generated=True,
+            llm_provider="fake",
+            llm_model="fake-model",
+            llm_usage={"input_tokens": 12, "output_tokens": 8},
+        )
+
+    monkeypatch.setattr(cli, "ask_indexed_code_question", fake_ask_service)
+
+    exit_code = cli.main(
+        [
+            "ask",
+            "--index-dir",
+            str(index_dir),
+            "--question",
+            "Where is calculate file hash handled?",
+            "--limit",
+            "3",
+            "--min-score",
+            "0.25",
+            "--minimum-results",
+            "2",
+            "--minimum-top-score",
+            "0.5",
+            "--no-langgraph",
+            "--use-llm",
+            "--llm-model",
+            "fake-model",
+            "--llm-temperature",
+            "0.1",
+        ]
+    )
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "Confidence: grounded_generated" in captured.out
+    assert "LLM generated: yes" in captured.out
+    assert "LLM provider: fake" in captured.out
+    assert "LLM model: fake-model" in captured.out
+    assert "LLM usage: {'input_tokens': 12, 'output_tokens': 8}" in captured.out
+    assert "fake generated CLI answer" in captured.out
+    assert captured.err == ""
+
+    assert calls["question"] == "Where is calculate file hash handled?"
+    assert isinstance(calls["snapshot"], IndexSnapshot)
+    assert calls["limit"] == 3
+    assert calls["min_score"] == 0.25
+    assert calls["minimum_results"] == 2
+    assert calls["minimum_top_score"] == 0.5
+    assert calls["prefer_langgraph"] is False
+    assert calls["use_llm"] is True
+    assert calls["llm_model"] == "fake-model"
+    assert calls["llm_temperature"] == 0.1
 
 
 def test_cli_ask_prints_stale_refusal_without_error_exit(
@@ -278,6 +407,7 @@ def test_cli_ask_prints_stale_refusal_without_error_exit(
     assert "Confidence: stale_index" in captured.out
     assert "Grounded: no" in captured.out
     assert "Stale: yes" in captured.out
+    assert "LLM generated: no" in captured.out
     assert "Re-index the repository" in captured.out
     assert captured.err == ""
 

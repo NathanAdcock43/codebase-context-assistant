@@ -2407,11 +2407,11 @@
   },
   {
     "path": "tests/test_cli.py",
-    "role": "Verify local CLI index, ask, and drift command behavior.",
+    "role": "Verify local CLI index, ask, generated ask, and drift command behavior.",
     "layer": "tests",
     "flow": "cli_validation",
     "header_fields": {
-      "ROLE": "Verify local CLI index, ask, and drift command behavior.",
+      "ROLE": "Verify local CLI index, ask, generated ask, and drift command behavior.",
       "LAYER": "tests",
       "FLOW": "cli_validation",
       "INPUTS": [
@@ -2420,13 +2420,15 @@
         "temporary index directories",
         "CLI argument lists",
         "existing JSON index snapshots",
-        "modified source files that make indexed context stale"
+        "modified source files that make indexed context stale",
+        "monkeypatched ask workflow service calls for generated-answer routing"
       ],
       "OUTPUTS": [
         "CLI exit code assertions",
         "CLI stdout assertions",
         "CLI stderr assertions",
         "persisted index assertions",
+        "generated-answer CLI routing assertions",
         "terminal drift report assertions"
       ],
       "UPSTREAM": [
@@ -2446,6 +2448,7 @@
       "OWNS": [
         "CLI index command tests",
         "CLI ask command tests",
+        "CLI generated-answer option tests",
         "CLI drift command tests",
         "terminal output formatting tests",
         "missing repository error tests",
@@ -2460,12 +2463,13 @@
         "retrieval service tests",
         "standalone drift detector tests",
         "LangGraph adapter tests",
-        "LLM response tests"
+        "real LLM provider tests"
       ],
       "SIDE_EFFECTS": [
         "writes temporary source files through pytest tmp_path",
         "writes temporary JSON index files through CLI and indexing pipeline",
         "modifies temporary source files to make indexed context stale",
+        "monkeypatches ask service in generated-answer routing tests",
         "captures stdout and stderr through pytest"
       ],
       "STATE": {
@@ -2483,19 +2487,27 @@
       "NOTES": [
         "These tests keep the CLI thin and focused on service wiring.",
         "Stale-index refusal is a successful CLI execution because the tool refused correctly.",
+        "Generated-answer CLI tests do not call a real LLM provider.",
         "The index and drift commands give the project a simple terminal-first demo path."
       ]
     },
     "imports": [
       "__future__",
       "code_context",
+      "code_context.agent.state",
+      "code_context.ask",
       "code_context.index_store",
+      "code_context.models",
       "code_context.pipeline",
-      "pathlib"
+      "pathlib",
+      "typing"
     ],
     "internal_imports": [
       "code_context",
+      "code_context.agent.state",
+      "code_context.ask",
       "code_context.index_store",
+      "code_context.models",
       "code_context.pipeline"
     ],
     "classes": [],
@@ -2504,6 +2516,7 @@
       "test_cli_index_supports_custom_index_filename",
       "test_cli_index_returns_error_for_missing_repository",
       "test_cli_ask_prints_grounded_answer_for_existing_index",
+      "test_cli_ask_routes_generated_answer_options_to_ask_service",
       "test_cli_ask_prints_stale_refusal_without_error_exit",
       "test_cli_ask_returns_error_for_missing_index",
       "test_cli_drift_reports_current_index",
