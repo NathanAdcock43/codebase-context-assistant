@@ -2961,6 +2961,101 @@
     "warnings": []
   },
   {
+    "path": "tests/test_prompts.py",
+    "role": "Verify grounded answer prompt construction.",
+    "layer": "tests",
+    "flow": "grounded_answer_prompt_validation",
+    "header_fields": {
+      "ROLE": "Verify grounded answer prompt construction.",
+      "LAYER": "tests",
+      "FLOW": "grounded_answer_prompt_validation",
+      "INPUTS": [
+        "sample developer questions",
+        "sample SearchResult records",
+        "sample SourceChunk records",
+        "model names",
+        "prompt construction limits"
+      ],
+      "OUTPUTS": [
+        "LlmRequest construction assertions",
+        "grounded source formatting assertions",
+        "prompt validation assertions",
+        "source truncation assertions"
+      ],
+      "UPSTREAM": [
+        "prompt builder module",
+        "LLM client boundary",
+        "SearchResult model",
+        "SourceChunk model",
+        "future LLM answer generation service"
+      ],
+      "DOWNSTREAM": [
+        "local test runs",
+        "future CI guardrails",
+        "future OpenAI provider tests",
+        "future grounded answer generation tests",
+        "future responder node LLM integration tests",
+        "system map review"
+      ],
+      "OWNS": [
+        "grounded answer prompt tests",
+        "source context formatting tests",
+        "prompt validation tests",
+        "source truncation tests"
+      ],
+      "DOES_NOT_OWN": [
+        "LLM provider client tests",
+        "retrieval tests",
+        "verifier tests",
+        "stale-index refusal tests",
+        "API route tests",
+        "CLI tests",
+        "LangGraph tests"
+      ],
+      "SIDE_EFFECTS": [
+        "none"
+      ],
+      "STATE": {
+        "reads": [
+          "in-memory test values"
+        ],
+        "writes": [
+          "none"
+        ]
+      },
+      "NOTES": [
+        "These tests do not call an LLM.",
+        "The prompt builder is a contract between verified retrieval and future generated answer text."
+      ]
+    },
+    "imports": [
+      "__future__",
+      "code_context.models",
+      "code_context.prompts",
+      "pytest"
+    ],
+    "internal_imports": [
+      "code_context.models",
+      "code_context.prompts"
+    ],
+    "classes": [],
+    "functions": [
+      "test_build_grounded_answer_request_creates_system_and_user_messages",
+      "test_build_grounded_answer_user_prompt_includes_answer_rules",
+      "test_build_grounded_answer_user_prompt_limits_result_count",
+      "test_format_search_result_context_includes_source_metadata_and_content",
+      "test_truncate_source_content_adds_marker_when_content_is_too_long",
+      "test_truncate_source_content_keeps_short_content_unchanged",
+      "test_build_grounded_answer_user_prompt_rejects_blank_question",
+      "test_build_grounded_answer_user_prompt_rejects_empty_results",
+      "test_build_grounded_answer_user_prompt_rejects_invalid_max_results",
+      "test_format_search_result_context_rejects_invalid_source_number",
+      "test_truncate_source_content_rejects_too_small_limit",
+      "_result"
+    ],
+    "warnings": []
+  },
+  {
     "path": "tests/test_retrieval.py",
     "role": "Verify grounded retrieval service behavior and sufficiency checks.",
     "layer": "tests",
@@ -3530,6 +3625,97 @@
     "functions": [
       "build_disabled_llm_client",
       "build_usage_metadata"
+    ],
+    "warnings": []
+  },
+  {
+    "path": "src/code_context/prompts.py",
+    "role": "Build grounded LLM prompts from verified retrieval results.",
+    "layer": "prompts",
+    "flow": "grounded_answer_prompting",
+    "header_fields": {
+      "ROLE": "Build grounded LLM prompts from verified retrieval results.",
+      "LAYER": "prompts",
+      "FLOW": "grounded_answer_prompting",
+      "INPUTS": [
+        "developer question text",
+        "grounded SearchResult records",
+        "LLM model name",
+        "prompt temperature setting",
+        "result count limits",
+        "source content character limits"
+      ],
+      "OUTPUTS": [
+        "provider-neutral LlmRequest records",
+        "system prompt text",
+        "user prompt text with source references"
+      ],
+      "UPSTREAM": [
+        "retrieval service",
+        "verifier node",
+        "future LLM answer generation service",
+        "future responder node LLM integration",
+        "local tests"
+      ],
+      "DOWNSTREAM": [
+        "LLM client boundary",
+        "future OpenAI provider adapter",
+        "future grounded answer synthesis",
+        "future API and CLI ask responses"
+      ],
+      "OWNS": [
+        "grounded answer system prompt text",
+        "grounded answer user prompt construction",
+        "source context formatting",
+        "source content truncation",
+        "prompt input validation"
+      ],
+      "DOES_NOT_OWN": [
+        "LLM provider calls",
+        "retrieval scoring",
+        "retrieval sufficiency decisions",
+        "stale-index refusal",
+        "citation verification after generation",
+        "API routing",
+        "CLI argument parsing",
+        "LangGraph workflow routing"
+      ],
+      "SIDE_EFFECTS": [
+        "none"
+      ],
+      "STATE": {
+        "reads": [
+          "in-memory SearchResult records"
+        ],
+        "writes": [
+          "none"
+        ]
+      },
+      "NOTES": [
+        "This module does not call an LLM.",
+        "This prompt builder should only be used after stale-index and sufficiency checks have passed.",
+        "The prompt tells the future LLM to answer only from supplied sources and to refuse if the sources are insufficient."
+      ]
+    },
+    "imports": [
+      "__future__",
+      "code_context.llm",
+      "code_context.models",
+      "collections.abc"
+    ],
+    "internal_imports": [
+      "code_context.llm",
+      "code_context.models"
+    ],
+    "classes": [],
+    "functions": [
+      "build_grounded_answer_request",
+      "build_grounded_answer_user_prompt",
+      "format_search_result_context",
+      "truncate_source_content",
+      "_normalize_question",
+      "_select_results",
+      "_validate_source_limit"
     ],
     "warnings": []
   }
