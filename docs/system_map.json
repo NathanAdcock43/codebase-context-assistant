@@ -1723,6 +1723,106 @@
     "warnings": []
   },
   {
+    "path": "tests/test_answer_generation.py",
+    "role": "Verify grounded answer generation orchestration behavior.",
+    "layer": "tests",
+    "flow": "grounded_answer_generation_validation",
+    "header_fields": {
+      "ROLE": "Verify grounded answer generation orchestration behavior.",
+      "LAYER": "tests",
+      "FLOW": "grounded_answer_generation_validation",
+      "INPUTS": [
+        "sample developer questions",
+        "sample SearchResult records",
+        "sample SourceChunk records",
+        "fake LLM clients",
+        "generated LLM response records",
+        "result limit settings"
+      ],
+      "OUTPUTS": [
+        "generated answer assertions",
+        "LLM request capture assertions",
+        "grounded source reference assertions",
+        "validation error assertions"
+      ],
+      "UPSTREAM": [
+        "grounded answer generation service",
+        "prompt builder module",
+        "LLM client boundary",
+        "SearchResult model",
+        "SourceChunk model"
+      ],
+      "DOWNSTREAM": [
+        "local test runs",
+        "future CI guardrails",
+        "future OpenAI provider tests",
+        "future responder node LLM integration tests",
+        "future API and CLI ask integration tests",
+        "system map review"
+      ],
+      "OWNS": [
+        "answer generation service tests",
+        "injected client invocation tests",
+        "generated answer shape tests",
+        "grounded source reference tests",
+        "source limit validation tests"
+      ],
+      "DOES_NOT_OWN": [
+        "OpenAI SDK tests",
+        "prompt formatting unit tests",
+        "retrieval tests",
+        "verifier tests",
+        "stale-index refusal tests",
+        "API route tests",
+        "CLI tests",
+        "LangGraph tests"
+      ],
+      "SIDE_EFFECTS": [
+        "fake clients capture in-memory LLM requests"
+      ],
+      "STATE": {
+        "reads": [
+          "in-memory test values"
+        ],
+        "writes": [
+          "in-memory fake client request capture"
+        ]
+      },
+      "NOTES": [
+        "These tests do not call a real LLM provider.",
+        "This protects the seam where future generated answers will be added after verification."
+      ]
+    },
+    "imports": [
+      "__future__",
+      "code_context.answer_generation",
+      "code_context.llm",
+      "code_context.models",
+      "pytest"
+    ],
+    "internal_imports": [
+      "code_context.answer_generation",
+      "code_context.llm",
+      "code_context.models"
+    ],
+    "classes": [
+      "FakeLlmClient",
+      "FailingLlmClient"
+    ],
+    "functions": [
+      "test_generate_grounded_answer_calls_injected_client_and_returns_answer",
+      "test_generate_grounded_answer_builds_grounded_prompt_request",
+      "test_generate_grounded_answer_limits_sources_sent_to_client_and_result",
+      "test_build_grounded_source_references_maps_search_results",
+      "test_generate_grounded_answer_rejects_empty_results",
+      "test_generate_grounded_answer_rejects_invalid_max_results",
+      "test_generate_grounded_answer_propagates_client_unavailable_error",
+      "test_generated_answer_requires_sources",
+      "_result"
+    ],
+    "warnings": []
+  },
+  {
     "path": "tests/test_api.py",
     "role": "Verify FastAPI endpoints for health, indexing, search, retrieval, ask, ask-time stale-index refusal, and drift detection.",
     "layer": "tests",
@@ -3310,6 +3410,104 @@
       "test_vector_dimension_must_be_at_least_eight",
       "test_search_limit_must_be_at_least_one",
       "_chunk"
+    ],
+    "warnings": []
+  },
+  {
+    "path": "src/code_context/answer_generation.py",
+    "role": "Generate grounded answer records through an injected LLM client boundary.",
+    "layer": "application_service",
+    "flow": "grounded_answer_generation",
+    "header_fields": {
+      "ROLE": "Generate grounded answer records through an injected LLM client boundary.",
+      "LAYER": "application_service",
+      "FLOW": "grounded_answer_generation",
+      "INPUTS": [
+        "developer question text",
+        "verified grounded SearchResult records",
+        "provider-neutral LlmClient implementations",
+        "LLM model names",
+        "prompt temperature settings",
+        "source result limits",
+        "source content character limits"
+      ],
+      "OUTPUTS": [
+        "GeneratedAnswer records",
+        "GroundedSourceReference records",
+        "provider-neutral LLM request execution through injected clients"
+      ],
+      "UPSTREAM": [
+        "prompt builder module",
+        "LLM client boundary",
+        "retrieval service",
+        "verifier node",
+        "future responder node LLM integration",
+        "local tests"
+      ],
+      "DOWNSTREAM": [
+        "future ask workflow LLM integration",
+        "future FastAPI ask responses",
+        "future CLI ask responses",
+        "future OpenAI provider adapter",
+        "future citation verification"
+      ],
+      "OWNS": [
+        "grounded answer generation orchestration",
+        "prompt builder invocation",
+        "injected LLM client invocation",
+        "generated answer result shape",
+        "grounded source reference extraction",
+        "source limit validation"
+      ],
+      "DOES_NOT_OWN": [
+        "OpenAI SDK calls",
+        "LLM provider configuration loading",
+        "retrieval scoring",
+        "retrieval sufficiency decisions",
+        "stale-index refusal",
+        "prompt formatting internals",
+        "API routing",
+        "CLI argument parsing",
+        "LangGraph workflow routing"
+      ],
+      "SIDE_EFFECTS": [
+        "calls the injected LlmClient.complete implementation"
+      ],
+      "STATE": {
+        "reads": [
+          "in-memory SearchResult records"
+        ],
+        "writes": [
+          "none"
+        ]
+      },
+      "NOTES": [
+        "This module does not create a real provider client.",
+        "This module should only be called after stale-index and sufficiency checks pass.",
+        "Tests use fake clients so no provider key or network call is required."
+      ]
+    },
+    "imports": [
+      "__future__",
+      "code_context.llm",
+      "code_context.models",
+      "code_context.prompts",
+      "collections.abc",
+      "pydantic"
+    ],
+    "internal_imports": [
+      "code_context.llm",
+      "code_context.models",
+      "code_context.prompts"
+    ],
+    "classes": [
+      "GroundedSourceReference",
+      "GeneratedAnswer"
+    ],
+    "functions": [
+      "generate_grounded_answer",
+      "build_grounded_source_references",
+      "_select_results"
     ],
     "warnings": []
   },
