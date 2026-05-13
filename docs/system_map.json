@@ -620,11 +620,12 @@
         "embedding dimension",
         "result limit",
         "minimum score threshold",
-        "chunk file paths for implementation-location matching"
+        "chunk file paths for implementation-location matching",
+        "implementation-location query intent signals"
       ],
       "OUTPUTS": [
         "SearchResult records ordered by descending relevance score",
-        "boosted ranking for path, file name, symbol, and source-content token matches"
+        "boosted ranking for path, file name, symbol, implementation-source, and source-content token matches"
       ],
       "UPSTREAM": [
         "source chunker",
@@ -646,7 +647,8 @@
         "cosine similarity scoring",
         "chunk retrieval ranking",
         "result limiting and score filtering",
-        "path and symbol match boosting for local retrieval quality"
+        "path and symbol match boosting for local retrieval quality",
+        "implementation-source preference when the query asks where behavior is implemented"
       ],
       "DOES_NOT_OWN": [
         "repository traversal",
@@ -673,6 +675,7 @@
         "This is a dependency-free retrieval baseline for the MVP.",
         "It gives us testable retrieval behavior before adding ChromaDB.",
         "Path and symbol boosting helps implementation-location questions without hiding source references.",
+        "Implementation questions should prefer source files over tests unless the query is explicitly about tests.",
         "Later ChromaDB storage should preserve the same public search behavior."
       ]
     },
@@ -698,6 +701,10 @@
       "cosine_similarity",
       "tokenize",
       "_score_entry",
+      "_implementation_source_boost",
+      "_looks_like_implementation_query",
+      "_is_source_path",
+      "_is_test_path",
       "_overlap_boost",
       "_build_searchable_chunk_text",
       "_path_tokens",
@@ -2241,7 +2248,8 @@
         "ask workflow service behavior assertions",
         "stale-index LLM guardrail assertions",
         "insufficient-context LLM guardrail assertions",
-        "generated answer metadata assertions"
+        "generated answer metadata assertions",
+        "generated self-refusal phrase detection assertions"
       ],
       "UPSTREAM": [
         "ask workflow orchestration service",
@@ -2267,6 +2275,7 @@
         "ask service stale-index refusal tests",
         "ask service optional LangGraph adapter invocation tests",
         "ask service generated answer tests",
+        "ask service generated self-refusal detection tests",
         "ask service LLM guardrail tests"
       ],
       "DOES_NOT_OWN": [
@@ -2327,6 +2336,7 @@
       "test_ask_indexed_code_question_returns_grounded_result",
       "test_ask_indexed_code_question_can_generate_grounded_answer_with_injected_llm_client",
       "test_ask_indexed_code_question_downgrades_generated_self_refusal_confidence",
+      "test_generated_answer_reports_insufficient_context_for_indexed_context_phrases",
       "test_ask_indexed_code_question_returns_insufficient_context",
       "test_ask_indexed_code_question_does_not_call_llm_when_context_is_insufficient",
       "test_ask_indexed_code_question_refuses_when_snapshot_is_stale",
@@ -3618,11 +3628,13 @@
         "developer query text",
         "search limit settings",
         "score threshold settings",
-        "file path and chunk ID examples for implementation-location questions"
+        "file path examples for implementation-location questions",
+        "implementation source versus test path examples"
       ],
       "OUTPUTS": [
         "vector store behavior assertions",
-        "path and symbol match boost assertions"
+        "path and symbol match boost assertions",
+        "implementation-source preference assertions"
       ],
       "UPSTREAM": [
         "vector store implementation",
@@ -3639,6 +3651,7 @@
         "local vector search tests",
         "ranking behavior tests",
         "path and symbol boost tests",
+        "implementation-source preference tests",
         "tokenization tests",
         "embedding stability tests",
         "score threshold tests",
@@ -3667,7 +3680,8 @@
       "NOTES": [
         "These tests give us a retrieval baseline before adding ChromaDB.",
         "The retrieval behavior should remain deterministic across runs.",
-        "Path and symbol boosting protects implementation-location questions without adding provider dependencies."
+        "Path and symbol boosting protects implementation-location questions without adding provider dependencies.",
+        "Implementation-location questions should prefer source files over tests unless the query asks about tests."
       ]
     },
     "imports": [
@@ -3685,6 +3699,8 @@
       "test_local_vector_store_returns_best_matching_chunk_first",
       "test_search_chunks_helper_builds_store_and_searches",
       "test_local_vector_store_boosts_path_matches_for_cli_implementation_questions",
+      "test_local_vector_store_prefers_source_file_over_test_file_for_implementation_question",
+      "test_local_vector_store_does_not_prefer_source_file_when_query_asks_about_tests",
       "test_local_vector_store_boosts_openai_adapter_path_matches",
       "test_local_vector_store_respects_limit",
       "test_local_vector_store_respects_min_score",

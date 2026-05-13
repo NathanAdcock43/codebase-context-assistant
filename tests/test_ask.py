@@ -20,6 +20,7 @@ OUTPUTS:
 - stale-index LLM guardrail assertions
 - insufficient-context LLM guardrail assertions
 - generated answer metadata assertions
+- generated self-refusal phrase detection assertions
 
 UPSTREAM:
 - ask workflow orchestration service
@@ -45,6 +46,7 @@ OWNS:
 - ask service stale-index refusal tests
 - ask service optional LangGraph adapter invocation tests
 - ask service generated answer tests
+- ask service generated self-refusal detection tests
 - ask service LLM guardrail tests
 
 DOES_NOT_OWN:
@@ -259,6 +261,20 @@ def test_ask_indexed_code_question_downgrades_generated_self_refusal_confidence(
     assert result.sources[0].chunk.relative_path == "scanner.py"
     assert any("scanner.py" in citation for citation in result.citations)
     assert len(fake_llm.requests) == 1
+
+
+@pytest.mark.parametrize(
+    "answer_text",
+    [
+        "The implementation is not present in the indexed context.",
+        "The exact implementation details are not included in the provided sources.",
+        "The implementation is not shown in the indexed context.",
+    ],
+)
+def test_generated_answer_reports_insufficient_context_for_indexed_context_phrases(
+    answer_text: str,
+) -> None:
+    assert ask_module._generated_answer_reports_insufficient_context(answer_text) is True
 
 
 def test_ask_indexed_code_question_returns_insufficient_context(tmp_path: Path) -> None:

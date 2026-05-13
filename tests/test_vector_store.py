@@ -10,11 +10,13 @@ INPUTS:
 - developer query text
 - search limit settings
 - score threshold settings
-- file path and chunk ID examples for implementation-location questions
+- file path examples for implementation-location questions
+- implementation source versus test path examples
 
 OUTPUTS:
 - vector store behavior assertions
 - path and symbol match boost assertions
+- implementation-source preference assertions
 
 UPSTREAM:
 - vector store implementation
@@ -31,6 +33,7 @@ OWNS:
 - local vector search tests
 - ranking behavior tests
 - path and symbol boost tests
+- implementation-source preference tests
 - tokenization tests
 - embedding stability tests
 - score threshold tests
@@ -58,6 +61,7 @@ NOTES:
 - These tests give us a retrieval baseline before adding ChromaDB.
 - The retrieval behavior should remain deterministic across runs.
 - Path and symbol boosting protects implementation-location questions without adding provider dependencies.
+- Implementation-location questions should prefer source files over tests unless the query asks about tests.
 """
 
 import pytest
@@ -147,6 +151,61 @@ def test_local_vector_store_boosts_path_matches_for_cli_implementation_questions
         "src/code_context/ask.py",
     ]
     assert results[0].score > results[1].score
+
+
+def test_local_vector_store_prefers_source_file_over_test_file_for_implementation_question() -> None:
+    store = LocalVectorStore()
+    test_chunk = _chunk(
+        chunk_id="tests/test_cli.py:281-360:test-cli",
+        relative_path="tests/test_cli.py",
+        content=(
+            "def test_cli_ask_routes_generated_answer_options_to_ask_service():\n"
+            "    args = ['ask', '--use-llm', '--llm-temperature', '0']\n"
+            "    assert generated answer options are routed to the ask service\n"
+        ),
+    )
+    source_chunk = _chunk(
+        chunk_id="src/code_context/cli.py:1-80:cli",
+        relative_path="src/code_context/cli.py",
+        content=(
+            "ask_parser.add_argument('--use-llm', action='store_true')\n"
+            "ask_parser.add_argument('--llm-temperature', type=float)\n"
+            "format_ask_result prints LLM generated provider model and usage metadata\n"
+        ),
+    )
+
+    store.add_chunks([test_chunk, source_chunk])
+
+    results = store.search("Where is the CLI generated answer opt-in implemented?", limit=2)
+
+    assert [result.chunk.relative_path for result in results] == [
+        "src/code_context/cli.py",
+        "tests/test_cli.py",
+    ]
+    assert results[0].score > results[1].score
+
+
+def test_local_vector_store_does_not_prefer_source_file_when_query_asks_about_tests() -> None:
+    store = LocalVectorStore()
+    test_chunk = _chunk(
+        chunk_id="tests/test_cli.py:281-360:test-cli",
+        relative_path="tests/test_cli.py",
+        content=(
+            "def test_cli_ask_routes_generated_answer_options_to_ask_service():\n"
+            "    assert generated answer options are routed to the ask service\n"
+        ),
+    )
+    source_chunk = _chunk(
+        chunk_id="src/code_context/cli.py:1-80:cli",
+        relative_path="src/code_context/cli.py",
+        content="ask_parser.add_argument('--use-llm', action='store_true')\n",
+    )
+
+    store.add_chunks([source_chunk, test_chunk])
+
+    results = store.search("Where are the CLI generated answer tests?", limit=2)
+
+    assert results[0].chunk.relative_path == "tests/test_cli.py"
 
 
 def test_local_vector_store_boosts_openai_adapter_path_matches() -> None:

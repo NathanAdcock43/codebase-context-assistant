@@ -12,10 +12,11 @@ INPUTS:
 - result limit
 - minimum score threshold
 - chunk file paths for implementation-location matching
+- implementation-location query intent signals
 
 OUTPUTS:
 - SearchResult records ordered by descending relevance score
-- boosted ranking for path, file name, symbol, and source-content token matches
+- boosted ranking for path, file name, symbol, implementation-source, and source-content token matches
 
 UPSTREAM:
 - source chunker
@@ -38,6 +39,7 @@ OWNS:
 - chunk retrieval ranking
 - result limiting and score filtering
 - path and symbol match boosting for local retrieval quality
+- implementation-source preference when the query asks where behavior is implemented
 
 DOES_NOT_OWN:
 - repository traversal
@@ -62,6 +64,7 @@ NOTES:
 - This is a dependency-free retrieval baseline for the MVP.
 - It gives us testable retrieval behavior before adding ChromaDB.
 - Path and symbol boosting helps implementation-location questions without hiding source references.
+- Implementation questions should prefer source files over tests unless the query is explicitly about tests.
 - Later ChromaDB storage should preserve the same public search behavior.
 """
 
@@ -81,6 +84,33 @@ PATH_MATCH_BOOST_PER_TOKEN = 0.6
 PATH_MATCH_BOOST_CAP = 1.2
 CONTENT_MATCH_BOOST_PER_TOKEN = 0.02
 CONTENT_MATCH_BOOST_CAP = 0.18
+IMPLEMENTATION_SOURCE_BOOST = 0.7
+TEST_FILE_IMPLEMENTATION_PENALTY = 0.35
+IMPLEMENTATION_QUERY_MARKERS = frozenset(
+    {
+        "defined",
+        "handled",
+        "implement",
+        "implemented",
+        "implementation",
+        "located",
+        "where",
+        "wired",
+        "wire",
+        "wiring",
+    }
+)
+TEST_QUERY_MARKERS = frozenset(
+    {
+        "coverage",
+        "test",
+        "tested",
+        "testing",
+        "tests",
+        "verify",
+        "verifies",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -232,8 +262,38 @@ def _score_entry(
         per_token=CONTENT_MATCH_BOOST_PER_TOKEN,
         cap=CONTENT_MATCH_BOOST_CAP,
     )
+    implementation_boost = _implementation_source_boost(query_tokens, entry.chunk)
 
-    return vector_score + path_boost + content_boost
+    return vector_score + path_boost + content_boost + implementation_boost
+
+
+def _implementation_source_boost(query_tokens: frozenset[str], chunk: SourceChunk) -> float:
+    if not _looks_like_implementation_query(query_tokens):
+        return 0.0
+
+    if _is_test_path(chunk.relative_path):
+        return -TEST_FILE_IMPLEMENTATION_PENALTY
+
+    if _is_source_path(chunk.relative_path):
+        return IMPLEMENTATION_SOURCE_BOOST
+
+    return 0.0
+
+
+def _looks_like_implementation_query(query_tokens: frozenset[str]) -> bool:
+    return bool(query_tokens & IMPLEMENTATION_QUERY_MARKERS) and not bool(
+        query_tokens & TEST_QUERY_MARKERS
+    )
+
+
+def _is_source_path(relative_path: str) -> bool:
+    normalized_path = relative_path.replace("\\", "/").lower()
+    return normalized_path.startswith("src/")
+
+
+def _is_test_path(relative_path: str) -> bool:
+    normalized_path = relative_path.replace("\\", "/").lower()
+    return normalized_path.startswith("tests/") or "/tests/" in normalized_path
 
 
 def _overlap_boost(
