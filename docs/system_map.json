@@ -2158,11 +2158,11 @@
   },
   {
     "path": "tests/test_cli.py",
-    "role": "Verify local CLI index and ask command behavior.",
+    "role": "Verify local CLI index, ask, and drift command behavior.",
     "layer": "tests",
     "flow": "cli_validation",
     "header_fields": {
-      "ROLE": "Verify local CLI index and ask command behavior.",
+      "ROLE": "Verify local CLI index, ask, and drift command behavior.",
       "LAYER": "tests",
       "FLOW": "cli_validation",
       "INPUTS": [
@@ -2170,18 +2170,21 @@
         "temporary source files",
         "temporary index directories",
         "CLI argument lists",
-        "existing JSON index snapshots"
+        "existing JSON index snapshots",
+        "modified source files that make indexed context stale"
       ],
       "OUTPUTS": [
         "CLI exit code assertions",
         "CLI stdout assertions",
         "CLI stderr assertions",
-        "persisted index assertions"
+        "persisted index assertions",
+        "terminal drift report assertions"
       ],
       "UPSTREAM": [
         "CLI implementation",
         "repository indexing pipeline",
         "reusable ask workflow service",
+        "drift detector",
         "JSON index store"
       ],
       "DOWNSTREAM": [
@@ -2194,16 +2197,19 @@
       "OWNS": [
         "CLI index command tests",
         "CLI ask command tests",
+        "CLI drift command tests",
         "terminal output formatting tests",
         "missing repository error tests",
         "missing index error tests",
-        "stale-index refusal output tests"
+        "stale-index refusal output tests",
+        "drift report output tests"
       ],
       "DOES_NOT_OWN": [
         "ask service unit tests",
         "API route tests",
         "repository scanner tests",
         "retrieval service tests",
+        "standalone drift detector tests",
         "LangGraph adapter tests",
         "LLM response tests"
       ],
@@ -2228,7 +2234,7 @@
       "NOTES": [
         "These tests keep the CLI thin and focused on service wiring.",
         "Stale-index refusal is a successful CLI execution because the tool refused correctly.",
-        "The index command gives the project a simple terminal-first demo path."
+        "The index and drift commands give the project a simple terminal-first demo path."
       ]
     },
     "imports": [
@@ -2250,7 +2256,11 @@
       "test_cli_index_returns_error_for_missing_repository",
       "test_cli_ask_prints_grounded_answer_for_existing_index",
       "test_cli_ask_prints_stale_refusal_without_error_exit",
-      "test_cli_ask_returns_error_for_missing_index"
+      "test_cli_ask_returns_error_for_missing_index",
+      "test_cli_drift_reports_current_index",
+      "test_cli_drift_reports_added_modified_and_removed_files",
+      "test_cli_drift_can_show_unchanged_files",
+      "test_cli_drift_returns_error_for_missing_index"
     ],
     "warnings": []
   },
@@ -2981,11 +2991,13 @@
         "indexing settings",
         "retrieval limit",
         "retrieval score thresholds",
-        "retrieval sufficiency thresholds"
+        "retrieval sufficiency thresholds",
+        "optional repository override for drift checks"
       ],
       "OUTPUTS": [
         "plain-text indexing summaries for terminal users",
         "plain-text ask results for terminal users",
+        "plain-text drift reports for terminal users",
         "process exit codes for command success or operational failure"
       ],
       "UPSTREAM": [
@@ -2995,6 +3007,8 @@
       ],
       "DOWNSTREAM": [
         "repository indexing pipeline",
+        "repository scanner",
+        "drift detector",
         "JSON index store",
         "reusable ask workflow service",
         "optional LangGraph workflow adapter through ask service",
@@ -3012,7 +3026,7 @@
         "file hashing internals",
         "source chunking internals",
         "JSON persistence internals",
-        "stale-index detection",
+        "stale-index comparison logic",
         "retrieval scoring",
         "ask workflow orchestration",
         "optional LangGraph workflow behavior",
@@ -3021,7 +3035,8 @@
       ],
       "SIDE_EFFECTS": [
         "index command reads repository files and writes a local JSON index file",
-        "ask command reads a local JSON index file",
+        "ask command reads a local JSON index file and repository files through the ask service",
+        "drift command reads a local JSON index file and repository files",
         "writes terminal output",
         "writes terminal error output"
       ],
@@ -3046,9 +3061,11 @@
       "__future__",
       "argparse",
       "code_context.ask",
+      "code_context.drift",
       "code_context.index_store",
       "code_context.models",
       "code_context.pipeline",
+      "code_context.scanner",
       "collections.abc",
       "pathlib",
       "pydantic",
@@ -3056,9 +3073,11 @@
     ],
     "internal_imports": [
       "code_context.ask",
+      "code_context.drift",
       "code_context.index_store",
       "code_context.models",
-      "code_context.pipeline"
+      "code_context.pipeline",
+      "code_context.scanner"
     ],
     "classes": [],
     "functions": [
@@ -3066,8 +3085,11 @@
       "build_parser",
       "_run_index_command",
       "_run_ask_command",
+      "_run_drift_command",
       "format_index_result",
       "format_ask_result",
+      "format_drift_report",
+      "_append_drift_group",
       "_yes_no"
     ],
     "warnings": []

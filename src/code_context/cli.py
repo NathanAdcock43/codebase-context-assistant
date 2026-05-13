@@ -14,10 +14,12 @@ INPUTS:
 - retrieval limit
 - retrieval score thresholds
 - retrieval sufficiency thresholds
+- optional repository override for drift checks
 
 OUTPUTS:
 - plain-text indexing summaries for terminal users
 - plain-text ask results for terminal users
+- plain-text drift reports for terminal users
 - process exit codes for command success or operational failure
 
 UPSTREAM:
@@ -27,6 +29,8 @@ UPSTREAM:
 
 DOWNSTREAM:
 - repository indexing pipeline
+- repository scanner
+- drift detector
 - JSON index store
 - reusable ask workflow service
 - optional LangGraph workflow adapter through ask service
@@ -44,7 +48,7 @@ DOES_NOT_OWN:
 - file hashing internals
 - source chunking internals
 - JSON persistence internals
-- stale-index detection
+- stale-index comparison logic
 - retrieval scoring
 - ask workflow orchestration
 - optional LangGraph workflow behavior
@@ -53,7 +57,8 @@ DOES_NOT_OWN:
 
 SIDE_EFFECTS:
 - index command reads repository files and writes a local JSON index file
-- ask command reads a local JSON index file
+- ask command reads a local JSON index file and repository files through the ask service
+- drift command reads a local JSON index file and repository files
 - writes terminal output
 - writes terminal error output
 
@@ -80,9 +85,11 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from code_context.ask import AskWorkflowResult, ask_indexed_code_question
+from code_context.drift import detect_drift
 from code_context.index_store import DEFAULT_INDEX_FILENAME, JsonIndexStore
-from code_context.models import IndexSnapshot
+from code_context.models import DriftReport, FileDrift, IndexSnapshot
 from code_context.pipeline import index_repository
+from code_context.scanner import scan_repository
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -95,6 +102,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "ask":
         return _run_ask_command(args)
+
+    if args.command == "drift":
+        return _run_drift_command(args)
 
     parser.print_help()
     return 0
@@ -190,6 +200,31 @@ def build_parser() -> argparse.ArgumentParser:
         help="Use the deterministic workflow directly instead of preferring LangGraph.",
     )
 
+    drift_parser = subparsers.add_parser(
+        "drift",
+        help="Compare the current repository files against an existing local index.",
+    )
+    drift_parser.add_argument(
+        "--index-dir",
+        required=True,
+        help="Directory containing the local JSON index.",
+    )
+    drift_parser.add_argument(
+        "--repo",
+        default=None,
+        help="Optional repository directory override. Defaults to the repo path stored in the index.",
+    )
+    drift_parser.add_argument(
+        "--index-filename",
+        default=DEFAULT_INDEX_FILENAME,
+        help="Index filename inside the index directory.",
+    )
+    drift_parser.add_argument(
+        "--show-unchanged",
+        action="store_true",
+        help="Include unchanged files in the terminal drift report.",
+    )
+
     return parser
 
 
@@ -230,6 +265,22 @@ def _run_ask_command(args: argparse.Namespace) -> int:
         return 1
 
     print(format_ask_result(result), end="")
+    return 0
+
+
+def _run_drift_command(args: argparse.Namespace) -> int:
+    store = JsonIndexStore(args.index_dir, index_filename=args.index_filename)
+
+    try:
+        snapshot = store.load()
+        repo_path = Path(args.repo) if args.repo else Path(snapshot.repo_root)
+        current_files = scan_repository(repo_path)
+        report = detect_drift(snapshot=snapshot, current_files=current_files)
+    except (FileNotFoundError, NotADirectoryError, ValidationError, ValueError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+
+    print(format_drift_report(report, show_unchanged=args.show_unchanged), end="")
     return 0
 
 
@@ -299,6 +350,39 @@ def format_ask_result(result: AskWorkflowResult) -> str:
         )
 
     return "\n".join(lines).rstrip() + "\n"
+
+
+def format_drift_report(report: DriftReport, *, show_unchanged: bool = False) -> str:
+    """Format a drift report for terminal output."""
+    lines = [
+        f"Drift status: {'stale' if report.is_stale else 'current'}",
+        f"Stale: {_yes_no(report.is_stale)}",
+        "",
+        f"Added files: {len(report.added)}",
+        f"Modified files: {len(report.modified)}",
+        f"Removed files: {len(report.removed)}",
+    ]
+
+    if show_unchanged:
+        lines.append(f"Unchanged files: {len(report.unchanged)}")
+
+    _append_drift_group(lines, "Added", report.added)
+    _append_drift_group(lines, "Modified", report.modified)
+    _append_drift_group(lines, "Removed", report.removed)
+
+    if show_unchanged:
+        _append_drift_group(lines, "Unchanged", report.unchanged)
+
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def _append_drift_group(lines: list[str], title: str, items: list[FileDrift]) -> None:
+    if not items:
+        return
+
+    lines.append("")
+    lines.append(f"{title}:")
+    lines.extend(f"- {item.relative_path}" for item in items)
 
 
 def _yes_no(value: bool) -> str:
