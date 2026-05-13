@@ -1138,55 +1138,75 @@
       "FLOW": "configuration",
       "INPUTS": [
         "local environment defaults",
+        "process environment variables",
         "project index directory setting",
-        "default text encoding setting"
+        "index filename setting",
+        "default text encoding setting",
+        "future LLM provider settings",
+        "future embedding provider settings",
+        "local API settings"
       ],
       "OUTPUTS": [
-        "AppConfig"
+        "AppConfig records",
+        "load_app_config helper results"
       ],
       "UPSTREAM": [
         "local development setup",
+        ".env.example documentation",
         "future CLI commands",
-        "future FastAPI startup configuration"
+        "future FastAPI startup configuration",
+        "future LLM answer generation slice"
       ],
       "DOWNSTREAM": [
         "scanner",
         "index store",
         "vector store",
         "API configuration",
+        "CLI configuration",
+        "future LLM provider integration",
         "local tooling"
       ],
       "OWNS": [
         "local application configuration model",
         "default index directory",
-        "default file encoding"
+        "default index filename",
+        "default file encoding",
+        "environment variable parsing",
+        "typed runtime configuration shape",
+        "future provider configuration placeholders"
       ],
       "DOES_NOT_OWN": [
         "repository scanning",
         "file hashing",
         "chunking",
         "vector search",
-        "LLM provider configuration",
-        "FastAPI route definitions"
+        "LLM provider clients",
+        "embedding provider clients",
+        "FastAPI route definitions",
+        "CLI argument parsing"
       ],
       "SIDE_EFFECTS": [
-        "none"
+        "load_app_config reads process environment when no explicit environment mapping is provided"
       ],
       "STATE": {
         "reads": [
-          "none"
+          "process environment variables when load_app_config is called without an explicit environment mapping"
         ],
         "writes": [
           "none"
         ]
       },
       "NOTES": [
-        "Keep this model small until runtime configuration needs become clearer.",
-        "Avoid hiding project behavior behind configuration too early."
+        "Keep this model small and explicit.",
+        "Do not load .env files directly in this module.",
+        "CLI and API arguments should still be able to override these defaults later.",
+        "LLM settings are configuration placeholders until a later LLM slice wires them into answer generation."
       ]
     },
     "imports": [
       "__future__",
+      "collections.abc",
+      "os",
       "pathlib",
       "pydantic"
     ],
@@ -1194,7 +1214,12 @@
     "classes": [
       "AppConfig"
     ],
-    "functions": [],
+    "functions": [
+      "load_app_config",
+      "_get_env",
+      "_get_optional_env",
+      "_get_int_env"
+    ],
     "warnings": []
   },
   {
@@ -2261,6 +2286,88 @@
       "test_cli_drift_reports_added_modified_and_removed_files",
       "test_cli_drift_can_show_unchanged_files",
       "test_cli_drift_returns_error_for_missing_index"
+    ],
+    "warnings": []
+  },
+  {
+    "path": "tests/test_config.py",
+    "role": "Verify environment-backed application configuration behavior.",
+    "layer": "tests",
+    "flow": "configuration_validation",
+    "header_fields": {
+      "ROLE": "Verify environment-backed application configuration behavior.",
+      "LAYER": "tests",
+      "FLOW": "configuration_validation",
+      "INPUTS": [
+        "explicit test environment mappings",
+        "default AppConfig values",
+        "invalid API port values"
+      ],
+      "OUTPUTS": [
+        "configuration model behavior assertions",
+        "environment parsing assertions",
+        "validation error assertions"
+      ],
+      "UPSTREAM": [
+        "config module",
+        ".env.example documentation",
+        "future CLI configuration wiring",
+        "future API configuration wiring",
+        "future LLM provider configuration"
+      ],
+      "DOWNSTREAM": [
+        "local test runs",
+        "future CI guardrails",
+        "future LLM integration tests",
+        "future API startup configuration tests",
+        "system map review"
+      ],
+      "OWNS": [
+        "AppConfig default tests",
+        "environment override tests",
+        "optional empty secret normalization tests",
+        "API port validation tests"
+      ],
+      "DOES_NOT_OWN": [
+        "CLI behavior tests",
+        "API route tests",
+        "LLM provider client tests",
+        "embedding provider tests",
+        "index store tests",
+        "vector store tests"
+      ],
+      "SIDE_EFFECTS": [
+        "none"
+      ],
+      "STATE": {
+        "reads": [
+          "in-memory environment mappings"
+        ],
+        "writes": [
+          "none"
+        ]
+      },
+      "NOTES": [
+        "These tests keep configuration deterministic by passing explicit environment mappings.",
+        "Do not require a real .env file or real provider key."
+      ]
+    },
+    "imports": [
+      "__future__",
+      "code_context.config",
+      "pathlib",
+      "pytest"
+    ],
+    "internal_imports": [
+      "code_context.config"
+    ],
+    "classes": [],
+    "functions": [
+      "test_app_config_defaults_match_local_development_expectations",
+      "test_load_app_config_uses_explicit_environment_mapping",
+      "test_load_app_config_treats_blank_optional_provider_values_as_none",
+      "test_load_app_config_rejects_invalid_integer_port",
+      "test_load_app_config_rejects_out_of_range_api_port"
     ],
     "warnings": []
   },
