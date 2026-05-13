@@ -10,9 +10,11 @@ INPUTS:
 - developer query text
 - search limit settings
 - score threshold settings
+- file path and chunk ID examples for implementation-location questions
 
 OUTPUTS:
 - vector store behavior assertions
+- path and symbol match boost assertions
 
 UPSTREAM:
 - vector store implementation
@@ -28,6 +30,7 @@ DOWNSTREAM:
 OWNS:
 - local vector search tests
 - ranking behavior tests
+- path and symbol boost tests
 - tokenization tests
 - embedding stability tests
 - score threshold tests
@@ -40,6 +43,7 @@ DOES_NOT_OWN:
 - drift detection tests
 - API tests
 - agent workflow tests
+- real LLM provider tests
 
 SIDE_EFFECTS:
 - none
@@ -53,6 +57,7 @@ STATE:
 NOTES:
 - These tests give us a retrieval baseline before adding ChromaDB.
 - The retrieval behavior should remain deterministic across runs.
+- Path and symbol boosting protects implementation-location questions without adding provider dependencies.
 """
 
 import pytest
@@ -112,6 +117,62 @@ def test_search_chunks_helper_builds_store_and_searches() -> None:
     assert results[0].score > 0.0
 
 
+def test_local_vector_store_boosts_path_matches_for_cli_implementation_questions() -> None:
+    store = LocalVectorStore()
+    ask_chunk = _chunk(
+        chunk_id="src/code_context/ask.py:1-80:ask",
+        relative_path="src/code_context/ask.py",
+        content=(
+            "optional generated answer orchestration after grounding checks pass\n"
+            "generated answer metadata is attached to the result\n"
+            "build_generated_ask_result handles generated answer records\n"
+        ),
+    )
+    cli_chunk = _chunk(
+        chunk_id="src/code_context/cli.py:1-80:cli",
+        relative_path="src/code_context/cli.py",
+        content=(
+            "ask_parser.add_argument('--use-llm', action='store_true')\n"
+            "ask_parser.add_argument('--llm-temperature', type=float)\n"
+            "format_ask_result prints LLM generated provider model and usage metadata\n"
+        ),
+    )
+
+    store.add_chunks([ask_chunk, cli_chunk])
+
+    results = store.search("Where is the CLI generated answer opt-in implemented?", limit=2)
+
+    assert [result.chunk.relative_path for result in results] == [
+        "src/code_context/cli.py",
+        "src/code_context/ask.py",
+    ]
+    assert results[0].score > results[1].score
+
+
+def test_local_vector_store_boosts_openai_adapter_path_matches() -> None:
+    store = LocalVectorStore()
+    llm_chunk = _chunk(
+        chunk_id="src/code_context/llm.py:1-80:llm",
+        relative_path="src/code_context/llm.py",
+        content="provider neutral LLM boundary for future OpenAI provider adapter",
+    )
+    openai_chunk = _chunk(
+        chunk_id="src/code_context/openai_client.py:1-80:openai",
+        relative_path="src/code_context/openai_client.py",
+        content="class OpenAiLlmClient adapts the Responses API to the local client boundary",
+    )
+
+    store.add_chunks([llm_chunk, openai_chunk])
+
+    results = store.search("Where is the OpenAI adapter implemented?", limit=2)
+
+    assert [result.chunk.relative_path for result in results] == [
+        "src/code_context/openai_client.py",
+        "src/code_context/llm.py",
+    ]
+    assert results[0].score > results[1].score
+
+
 def test_local_vector_store_respects_limit() -> None:
     store = LocalVectorStore()
     store.add_chunks(
@@ -166,6 +227,14 @@ def test_tokenize_includes_snake_case_parts() -> None:
     assert "calculate" in tokens
     assert "file" in tokens
     assert "hash" in tokens
+
+
+def test_tokenize_splits_kebab_style_cli_flags() -> None:
+    tokens = tokenize("--use-llm --llm-temperature")
+
+    assert "use" in tokens
+    assert "llm" in tokens
+    assert "temperature" in tokens
 
 
 def test_embed_text_is_deterministic() -> None:

@@ -11,15 +11,19 @@ INPUTS:
 - embedding dimension
 - result limit
 - minimum score threshold
+- chunk file paths for implementation-location matching
 
 OUTPUTS:
 - SearchResult records ordered by descending relevance score
+- boosted ranking for path, file name, symbol, and source-content token matches
 
 UPSTREAM:
 - source chunker
 - index store
-- future FastAPI ask endpoint
-- future retriever node
+- FastAPI search endpoint
+- FastAPI retrieve endpoint
+- retriever node
+- ask workflow
 
 DOWNSTREAM:
 - verifier
@@ -33,6 +37,7 @@ OWNS:
 - cosine similarity scoring
 - chunk retrieval ranking
 - result limiting and score filtering
+- path and symbol match boosting for local retrieval quality
 
 DOES_NOT_OWN:
 - repository traversal
@@ -56,6 +61,7 @@ STATE:
 NOTES:
 - This is a dependency-free retrieval baseline for the MVP.
 - It gives us testable retrieval behavior before adding ChromaDB.
+- Path and symbol boosting helps implementation-location questions without hiding source references.
 - Later ChromaDB storage should preserve the same public search behavior.
 """
 
@@ -63,12 +69,26 @@ import hashlib
 import math
 import re
 from collections.abc import Iterable
+from dataclasses import dataclass
 
 from code_context.models import SearchResult, SourceChunk
 
 
 DEFAULT_EMBEDDING_DIMENSION = 256
 TOKEN_PATTERN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*|\d+")
+
+PATH_MATCH_BOOST_PER_TOKEN = 0.6
+PATH_MATCH_BOOST_CAP = 1.2
+CONTENT_MATCH_BOOST_PER_TOKEN = 0.02
+CONTENT_MATCH_BOOST_CAP = 0.18
+
+
+@dataclass(frozen=True)
+class _ChunkEntry:
+    chunk: SourceChunk
+    vector: list[float]
+    path_tokens: frozenset[str]
+    content_tokens: frozenset[str]
 
 
 class LocalVectorStore:
@@ -79,12 +99,19 @@ class LocalVectorStore:
             raise ValueError("dimension must be at least 8")
 
         self.dimension = dimension
-        self._entries: list[tuple[SourceChunk, list[float]]] = []
+        self._entries: list[_ChunkEntry] = []
 
     def add_chunks(self, chunks: Iterable[SourceChunk]) -> None:
         """Add chunks to the local search store."""
         for chunk in chunks:
-            self._entries.append((chunk, embed_text(chunk.content, dimension=self.dimension)))
+            self._entries.append(
+                _ChunkEntry(
+                    chunk=chunk,
+                    vector=embed_text(_build_searchable_chunk_text(chunk), dimension=self.dimension),
+                    path_tokens=_path_tokens(chunk),
+                    content_tokens=frozenset(tokenize(chunk.content)),
+                )
+            )
 
     def clear(self) -> None:
         """Remove all indexed chunks from the local search store."""
@@ -101,16 +128,21 @@ class LocalVectorStore:
         if limit < 1:
             raise ValueError("limit must be at least 1")
 
+        query_tokens = frozenset(tokenize(query))
         query_vector = embed_text(query, dimension=self.dimension)
         if not any(query_vector):
             return []
 
         results: list[SearchResult] = []
 
-        for chunk, chunk_vector in self._entries:
-            score = cosine_similarity(query_vector, chunk_vector)
+        for entry in self._entries:
+            score = _score_entry(
+                query_vector=query_vector,
+                query_tokens=query_tokens,
+                entry=entry,
+            )
             if score >= min_score:
-                results.append(SearchResult(chunk=chunk, score=score))
+                results.append(SearchResult(chunk=entry.chunk, score=score))
 
         results.sort(
             key=lambda result: (
@@ -179,6 +211,69 @@ def tokenize(text: str) -> list[str]:
             tokens.extend(part for part in normalized.split("_") if part)
 
     return tokens
+
+
+def _score_entry(
+    *,
+    query_vector: list[float],
+    query_tokens: frozenset[str],
+    entry: _ChunkEntry,
+) -> float:
+    vector_score = cosine_similarity(query_vector, entry.vector)
+    path_boost = _overlap_boost(
+        query_tokens,
+        entry.path_tokens,
+        per_token=PATH_MATCH_BOOST_PER_TOKEN,
+        cap=PATH_MATCH_BOOST_CAP,
+    )
+    content_boost = _overlap_boost(
+        query_tokens,
+        entry.content_tokens,
+        per_token=CONTENT_MATCH_BOOST_PER_TOKEN,
+        cap=CONTENT_MATCH_BOOST_CAP,
+    )
+
+    return vector_score + path_boost + content_boost
+
+
+def _overlap_boost(
+    query_tokens: frozenset[str],
+    candidate_tokens: frozenset[str],
+    *,
+    per_token: float,
+    cap: float,
+) -> float:
+    if not query_tokens or not candidate_tokens:
+        return 0.0
+
+    overlap_count = len(query_tokens & candidate_tokens)
+    return min(cap, overlap_count * per_token)
+
+
+def _build_searchable_chunk_text(chunk: SourceChunk) -> str:
+    path_terms = " ".join(sorted(_path_tokens(chunk)))
+
+    return "\n".join(
+        [
+            path_terms,
+            path_terms,
+            chunk.language,
+            chunk.content,
+        ]
+    )
+
+
+def _path_tokens(chunk: SourceChunk) -> frozenset[str]:
+    return frozenset(
+        tokenize(
+            " ".join(
+                [
+                    chunk.relative_path,
+                    chunk.language,
+                ]
+            )
+        )
+    )
 
 
 def _token_index(token: str, *, dimension: int) -> int:
