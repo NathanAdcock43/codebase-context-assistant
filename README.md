@@ -28,8 +28,6 @@ The project can currently:
 - route ask workflow execution through an optional LangGraph adapter with deterministic fallback
 - optionally call a configured OpenAI LLM after stale-index and grounding checks pass
 - downgrade generated self-refusals when the supplied context is insufficient
-- optionally call a configured OpenAI LLM after stale-index and grounding checks pass
-- downgrade generated self-refusals when the supplied context is insufficient
 
 ## Current architecture
 
@@ -45,6 +43,7 @@ The current workflow is:
         -> verifier
         -> responder
         -> grounded answer or refusal
+        -> optional generated answer after verification
 
 The stale-context workflow is:
 
@@ -72,7 +71,7 @@ Key modules:
 
 - Python 3.13
 - Git
-- PowerShell
+- PowerShell on Windows, or a standard shell on macOS/Linux
 
 Optional:
 
@@ -88,75 +87,91 @@ Clone the repository:
     git clone git@github.com:NathanAdcock43/codebase-context-assistant.git
     cd codebase-context-assistant
 
-Create a virtual environment:
+Create and activate a virtual environment.
+
+Windows:
 
     py -3.13 -m venv .venv
-
-Activate it:
-
     .\.venv\Scripts\Activate.ps1
 
-Install locally:
+macOS or Linux:
+
+    python3.13 -m venv .venv
+    source .venv/bin/activate
+
+Install locally.
+
+Windows:
 
     .\.venv\Scripts\python.exe -m pip install --upgrade pip
     .\.venv\Scripts\python.exe -m pip install -e .
 
-Install with optional OpenAI support if you want generated answers:
+macOS or Linux:
+
+    python -m pip install --upgrade pip
+    python -m pip install -e .
+
+Install with optional OpenAI support if you want generated answers.
+
+Windows:
 
     .\.venv\Scripts\python.exe -m pip install -e ".[openai]"
 
-Install with optional OpenAI support if you want generated answers:
+macOS or Linux:
 
-    .\.venv\Scripts\python.exe -m pip install -e ".[openai]"
+    python -m pip install -e ".[openai]"
 
 Run tests:
 
-    py -3.13 -m pytest
+    python -m pytest
 
 Regenerate the system map:
 
-    py -3.13 .\src\code_context\scripts\build_system_map.py
+    python src/code_context/scripts/build_system_map.py
 
 For detailed setup instructions, see:
 
-    docs\local_setup.md
+    docs/local_setup.md
 
 ## CLI usage
 
-Set local paths:
+Set local paths.
+
+Windows:
 
     $RepoPath = (Get-Location).Path
     $IndexDir = Join-Path $RepoPath ".code_context_index"
 
+macOS or Linux:
+
+    RepoPath="$(pwd)"
+    IndexDir=".code_context_index"
+
 Create an index:
 
-    py -3.13 -m code_context.cli index --repo $RepoPath --index-dir $IndexDir
+    python -m code_context.cli index --repo "$RepoPath" --index-dir "$IndexDir"
 
 Ask a grounded question:
 
-    py -3.13 -m code_context.cli ask --index-dir $IndexDir --question "Where is the ask workflow implemented?" --no-langgraph
+    python -m code_context.cli ask --index-dir "$IndexDir" --question "Where is the ask workflow implemented?" --no-langgraph
 
 Ask with an optional generated answer after loading OpenAI environment settings:
 
-    py -3.13 -m code_context.cli ask --index-dir $IndexDir --question "Where is the CLI generated answer opt-in implemented?" --limit 8 --no-langgraph --use-llm --llm-temperature 0
-
-Ask with an optional generated answer after loading OpenAI environment settings:
-
-    py -3.13 -m code_context.cli ask --index-dir $IndexDir --question "Where is the CLI generated answer opt-in implemented?" --limit 8 --no-langgraph --use-llm --llm-temperature 0
+    python -m code_context.cli ask --index-dir "$IndexDir" --question "Where is the CLI generated answer opt-in implemented?" --limit 8 --no-langgraph --use-llm --llm-temperature 0
 
 Check whether the index is stale:
 
-    py -3.13 -m code_context.cli drift --index-dir $IndexDir
+    python -m code_context.cli drift --index-dir "$IndexDir"
 
 Show unchanged files too:
 
-    py -3.13 -m code_context.cli drift --index-dir $IndexDir --show-unchanged
+    python -m code_context.cli drift --index-dir "$IndexDir" --show-unchanged
 
 ## FastAPI usage
 
 Start the local API:
 
-    py -3.13 -m uvicorn code_context.api:app --reload
+    python -m uvicorn code_context.api:app --reload
 
 Open the API docs:
 
@@ -171,31 +186,15 @@ Current endpoints:
 - `POST /ask`
 - `POST /drift`
 
-Optional generated-answer `/ask` request shape:
+Optional generated-answer `/ask` request body:
 
-```json
-{
-  "index_dir": ".code_context_index",
-  "question": "Where is the CLI generated answer opt-in implemented?",
-  "limit": 8,
-  "use_llm": true,
-  "llm_temperature": 0
-}
-```
-
-Generated answers still use the same stale-index and grounding checks before the provider is called.
-
-Optional generated-answer `/ask` request shape:
-
-```json
-{
-  "index_dir": ".code_context_index",
-  "question": "Where is the CLI generated answer opt-in implemented?",
-  "limit": 8,
-  "use_llm": true,
-  "llm_temperature": 0
-}
-```
+    {
+      "index_dir": ".code_context_index",
+      "question": "Where is the CLI generated answer opt-in implemented?",
+      "limit": 8,
+      "use_llm": true,
+      "llm_temperature": 0
+    }
 
 Generated answers still use the same stale-index and grounding checks before the provider is called.
 
@@ -203,7 +202,11 @@ Generated answers still use the same stale-index and grounding checks before the
 
 Use the local demo script:
 
-    docs\demo_script.md
+    docs/demo_script.md
+
+Use the release-ready checklist:
+
+    docs/demo_checklist.md
 
 The demo walks through:
 
@@ -216,6 +219,7 @@ The demo walks through:
 7. refusing to answer from a stale index
 8. re-indexing
 9. asking again
+10. optionally asking through generated CLI and API paths
 
 ## Example questions
 
@@ -228,6 +232,7 @@ Good demo questions:
 - What files would I change to adjust source chunking?
 - What files would I change to adjust retrieval scoring?
 - Where is the optional LangGraph adapter implemented?
+- Where is the CLI generated answer opt-in implemented?
 
 ## Current limitations
 
@@ -239,6 +244,7 @@ Good demo questions:
 - There is no Docker packaging yet.
 - There is no authentication or multi-user support.
 - The system map is useful for project visibility, but it is not yet a full C4 architecture export.
+- Generated-answer citation verification can be improved further.
 
 ## Next likely improvements
 
@@ -257,14 +263,13 @@ Later improvements:
 - Git-aware change detection
 - evidence-backed architecture model export
 - C4-friendly architecture export
-- Docker packaging
 - GitHub Actions validation
 
 ## Development workflow
 
 For project changes:
 
-1. create or replace files using `Write-Utf8NoBom`
+1. create or replace files
 2. run tests
 3. regenerate the system map
 4. review `git status`
@@ -274,8 +279,8 @@ For project changes:
 
 Standard validation commands:
 
-    py -3.13 -m pytest
-    py -3.13 .\src\code_context\scripts\build_system_map.py
+    python -m pytest
+    python src/code_context/scripts/build_system_map.py
     git status
 
 ## Project positioning
