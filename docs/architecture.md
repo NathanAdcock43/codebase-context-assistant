@@ -87,6 +87,32 @@ The stale-index flow is:
         -> added, modified, removed, unchanged file groups
         -> stale or current report
 
+## Deterministic ticket-anchor retrieval
+
+Ticket-style questions often do not include exact source paths. To improve retrieval without letting the system guess, the project includes a deterministic query-analysis layer.
+
+The query-analysis layer extracts structural anchors from the question, such as:
+
+- source paths
+- issue keys
+- uppercase database-style identifiers
+- code-like identifiers
+- quoted UI or workflow phrases
+- short title-style phrases
+
+Those anchors are used to build enriched retrieval text before searching indexed chunks. The original user question is still preserved in the response. The enrichment step repeats detected anchors, but it does not introduce domain-specific synonyms or inferred implementation facts.
+
+Example ticket-style question:
+
+    TASK-123
+    Data change request
+    Add CUSTOMER_EXPORT_STATUS to EXPORT_RUN_OPTIONS.
+    Users need an option to control export status during run setup.
+
+The system can use `CUSTOMER_EXPORT_STATUS` and `EXPORT_RUN_OPTIONS` as retrieval anchors and return the most relevant indexed source file.
+
+This is intentionally not full semantic understanding. If the question lacks strong anchors and retrieval confidence is weak, the system should still refuse or qualify the answer instead of inventing code relationships.
+
 ## Core modules
 
 ### `src/code_context/scanner.py`

@@ -29,6 +29,12 @@ The project can currently:
 - optionally call a configured OpenAI LLM after stale-index and grounding checks pass
 - downgrade generated self-refusals when the supplied context is insufficient
 
+## Deterministic ticket-style retrieval
+
+The assistant can handle some fuzzy ticket-style questions when the text contains concrete anchors. It extracts structural terms such as source paths, issue keys, database-style identifiers, code-like identifiers, and quoted phrases, then uses those anchors to enrich retrieval before answering.
+
+This is deterministic. It does not use a model to invent synonyms or guess hidden code relationships. If retrieved context is weak, stale, or missing a requested file, the assistant refuses instead of producing an ungrounded answer.
+
 ## Current architecture
 
 The current workflow is:

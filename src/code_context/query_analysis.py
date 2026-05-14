@@ -248,8 +248,7 @@ def _phrase_has_retrieval_value(phrase: str) -> bool:
     words = phrase.split()
 
     if len(words) < 2:
-        return False
-
+        return Fals
     if len(words) > 6:
         return False
 
