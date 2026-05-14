@@ -519,6 +519,101 @@
     "warnings": []
   },
   {
+    "path": "src/code_context/query_analysis.py",
+    "role": "Extract deterministic retrieval anchors from developer questions and pasted tickets.",
+    "layer": "retrieval",
+    "flow": "query_anchor_analysis",
+    "header_fields": {
+      "ROLE": "Extract deterministic retrieval anchors from developer questions and pasted tickets.",
+      "LAYER": "retrieval",
+      "FLOW": "query_anchor_analysis",
+      "INPUTS": [
+        "developer question text",
+        "pasted ticket descriptions",
+        "source path references",
+        "code/database identifier text",
+        "quoted UI or workflow phrases"
+      ],
+      "OUTPUTS": [
+        "QueryAnchors records",
+        "normalized source path anchors",
+        "issue key anchors",
+        "database identifier anchors",
+        "code identifier anchors",
+        "quoted phrase anchors",
+        "title phrase anchors"
+      ],
+      "UPSTREAM": [
+        "future retrieval planning service",
+        "future ticket-aware retrieval flow",
+        "local tests",
+        "future CLI and API ask workflows"
+      ],
+      "DOWNSTREAM": [
+        "vector retrieval query construction",
+        "retrieval sufficiency checks",
+        "future query expansion service",
+        "future lightweight LLM query rewrite service"
+      ],
+      "OWNS": [
+        "deterministic query anchor extraction",
+        "path-like text normalization",
+        "issue key detection",
+        "database identifier detection",
+        "code-like identifier detection",
+        "quoted phrase extraction",
+        "conservative title phrase extraction"
+      ],
+      "DOES_NOT_OWN": [
+        "vector scoring",
+        "source chunk search",
+        "retrieval sufficiency decisions",
+        "LLM-based query expansion",
+        "ticket system integration",
+        "answer generation",
+        "API routing",
+        "CLI argument parsing"
+      ],
+      "SIDE_EFFECTS": [
+        "none"
+      ],
+      "STATE": {
+        "reads": [
+          "none"
+        ],
+        "writes": [
+          "none"
+        ]
+      },
+      "NOTES": [
+        "This module is intentionally deterministic.",
+        "It gives fuzzy ticket retrieval a safer first pass before any model-based query expansion.",
+        "It should extract anchors, not infer facts about the codebase."
+      ]
+    },
+    "imports": [
+      "__future__",
+      "dataclasses",
+      "re"
+    ],
+    "internal_imports": [],
+    "classes": [
+      "QueryAnchors"
+    ],
+    "functions": [
+      "extract_query_anchors",
+      "extract_query_paths",
+      "_extract_code_identifiers",
+      "_looks_like_code_identifier",
+      "_extract_title_phrases",
+      "_phrase_has_retrieval_value",
+      "_normalize_path",
+      "_normalize_phrase",
+      "_sorted_unique"
+    ],
+    "warnings": []
+  },
+  {
     "path": "src/code_context/retrieval.py",
     "role": "Retrieve grounded source context from an index snapshot and decide whether it is sufficient.",
     "layer": "retrieval",
@@ -3470,6 +3565,91 @@
       "test_format_search_result_context_rejects_invalid_source_number",
       "test_truncate_source_content_rejects_too_small_limit",
       "_result"
+    ],
+    "warnings": []
+  },
+  {
+    "path": "tests/test_query_analysis.py",
+    "role": "Verify deterministic query anchor extraction.",
+    "layer": "tests",
+    "flow": "query_anchor_analysis_validation",
+    "header_fields": {
+      "ROLE": "Verify deterministic query anchor extraction.",
+      "LAYER": "tests",
+      "FLOW": "query_anchor_analysis_validation",
+      "INPUTS": [
+        "sample developer questions",
+        "sample pasted ticket descriptions",
+        "path-like source references",
+        "issue keys",
+        "database identifiers",
+        "code identifiers",
+        "quoted UI phrases",
+        "title-style UI phrases"
+      ],
+      "OUTPUTS": [
+        "QueryAnchors behavior assertions",
+        "path normalization assertions",
+        "issue key extraction assertions",
+        "database identifier extraction assertions",
+        "code identifier extraction assertions",
+        "UI phrase extraction assertions"
+      ],
+      "UPSTREAM": [
+        "query analysis module",
+        "future ticket-aware retrieval flow",
+        "future query expansion flow"
+      ],
+      "DOWNSTREAM": [
+        "local test runs",
+        "future CI guardrails",
+        "retrieval planning tests",
+        "system map review"
+      ],
+      "OWNS": [
+        "deterministic query anchor tests",
+        "fuzzy ticket anchor tests",
+        "source path normalization tests",
+        "strong-anchor detection tests"
+      ],
+      "DOES_NOT_OWN": [
+        "vector store ranking tests",
+        "retrieval sufficiency tests",
+        "ask workflow tests",
+        "API route tests",
+        "LLM query expansion tests",
+        "ticket system integration tests"
+      ],
+      "SIDE_EFFECTS": [
+        "none"
+      ],
+      "STATE": {
+        "reads": [
+          "in-memory query strings"
+        ],
+        "writes": [
+          "none"
+        ]
+      },
+      "NOTES": [
+        "These tests protect the deterministic layer before any optional model-based query expansion is added.",
+        "The query analysis module should extract anchors, not infer implementation facts."
+      ]
+    },
+    "imports": [
+      "__future__",
+      "code_context.query_analysis"
+    ],
+    "internal_imports": [
+      "code_context.query_analysis"
+    ],
+    "classes": [],
+    "functions": [
+      "test_extract_query_paths_normalizes_source_paths",
+      "test_extract_query_anchors_extracts_database_ticket_identifiers",
+      "test_extract_query_anchors_extracts_password_ticket_phrases",
+      "test_extract_query_anchors_extracts_quoted_ui_phrases",
+      "test_extract_query_anchors_marks_plain_fuzzy_question_as_weak"
     ],
     "warnings": []
   },
