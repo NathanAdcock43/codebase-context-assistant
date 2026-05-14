@@ -66,6 +66,8 @@ NOTES:
 - Domain-specific ticket terms may appear in test samples, but not in production heuristic lists.
 """
 
+from pathlib import Path
+
 from code_context.query_analysis import build_retrieval_query, extract_query_anchors, extract_query_paths
 
 
@@ -101,14 +103,30 @@ def test_extract_query_anchors_extracts_database_ticket_identifiers() -> None:
 
 
 
-def test_extract_query_anchors_keeps_title_phrase_detection_domain_neutral() -> None:
-    anchors = extract_query_anchors(
-        "For Update Billing Status and Review Export Queue, find the likely files."
+
+def test_query_analysis_production_heuristics_do_not_contain_domain_specific_terms() -> None:
+    source_text = Path("src/code_context/query_analysis.py").read_text(encoding="utf-8").lower()
+
+    forbidden_terms = (
+        "ascender",
+        "mainmenu",
+        "password",
+        "postgres",
+        "liquibase",
+        "edfi",
+        "regional lea",
+        "security",
     )
 
-    assert "Update Billing Status" in anchors.title_phrases
-    assert "Review Export Queue" in anchors.title_phrases
-    assert anchors.has_strong_anchors is False
+    assert [term for term in forbidden_terms if term in source_text] == []
+
+def test_extract_query_anchors_keeps_phrase_detection_domain_neutral() -> None:
+    anchors = extract_query_anchors(
+        'Find likely files for "Update Billing Status" and "Review Export Queue".'
+    )
+
+    assert anchors.quoted_phrases == ("Review Export Queue", "Update Billing Status")
+    assert anchors.has_strong_anchors is True
 
 def test_extract_query_anchors_extracts_password_ticket_phrases() -> None:
     ticket_text = """

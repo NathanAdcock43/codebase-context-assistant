@@ -86,7 +86,7 @@ TITLE_PHRASE_PATTERN = re.compile(
     r"\b[A-Z][A-Za-z0-9]+(?:\s+[A-Z][A-Za-z0-9]+){1,5}\b"
 )
 
-COMMON_TITLE_PHRASES = frozenset(
+COMMON_TRACKER_PHRASES = frozenset(
     {
         "Active Development",
         "Add Comment",
@@ -119,7 +119,6 @@ COMMON_IDENTIFIER_WORDS = frozenset(
         "none",
         "not",
         "option",
-        "postgres",
         "priority",
         "share",
         "sub",
@@ -236,7 +235,7 @@ def _extract_title_phrases(query: str) -> tuple[str, ...]:
     for match in TITLE_PHRASE_PATTERN.findall(query):
         normalized = _normalize_phrase(match)
 
-        if normalized.title() in COMMON_TITLE_PHRASES:
+        if normalized.title() in COMMON_TRACKER_PHRASES:
             continue
 
         if _phrase_has_retrieval_value(normalized):
@@ -251,10 +250,10 @@ def _phrase_has_retrieval_value(phrase: str) -> bool:
     if len(words) < 2:
         return False
 
-    return any(
-        word.lower() in {"change", "confirm", "create", "login", "new", "password", "user"}
-        for word in words
-    )
+    if len(words) > 6:
+        return False
+
+    return not all(word.lower() in COMMON_IDENTIFIER_WORDS for word in words)
 
 
 def _normalize_path(path: str) -> str:
