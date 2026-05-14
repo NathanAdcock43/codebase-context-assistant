@@ -280,6 +280,83 @@ def test_generated_answer_reports_insufficient_context_for_indexed_context_phras
     assert ask_module._generated_answer_reports_insufficient_context(answer_text) is True
 
 
+
+def test_ask_indexed_code_question_uses_enriched_ticket_anchors_for_grounding(
+    tmp_path: Path,
+) -> None:
+    export_file = tmp_path / "src" / "exports" / "options.py"
+    menu_file = tmp_path / "src" / "navigation" / "menu.py"
+    export_file.parent.mkdir(parents=True)
+    menu_file.parent.mkdir(parents=True)
+
+    export_file.write_bytes(
+        b"class ExportRunOptions:\n"
+        b"    CUSTOMER_EXPORT_STATUS = 'N'\n"
+        b"    def apply_export_status(self):\n"
+        b"        return CUSTOMER_EXPORT_STATUS\n"
+    )
+    menu_file.write_bytes(
+        b"class NavigationMenu:\n"
+        b"    def render_user_menu(self):\n"
+        b"        return 'menu'\n"
+    )
+
+    snapshot = _snapshot(
+        repo_root=tmp_path,
+        files=[
+            _file_metadata(export_file, "src/exports/options.py"),
+            _file_metadata(menu_file, "src/navigation/menu.py"),
+        ],
+        chunks=[
+            _chunk(
+                chunk_id="src/exports/options.py:1-4",
+                relative_path="src/exports/options.py",
+                content=(
+                    "class ExportRunOptions:\n"
+                    "    CUSTOMER_EXPORT_STATUS = 'N'\n"
+                    "    def apply_export_status(self):\n"
+                    "        return CUSTOMER_EXPORT_STATUS\n"
+                ),
+            ),
+            _chunk(
+                chunk_id="src/navigation/menu.py:1-3",
+                relative_path="src/navigation/menu.py",
+                content=(
+                    "class NavigationMenu:\n"
+                    "    def render_user_menu(self):\n"
+                    "        return 'menu'\n"
+                ),
+            ),
+        ],
+    )
+
+    question = """
+    TASK-123
+    Data change request
+    Add CUSTOMER_EXPORT_STATUS to EXPORT_RUN_OPTIONS.
+    Users need an option to control export status during run setup.
+    """
+
+    result = ask_module.ask_indexed_code_question(
+        question=question,
+        snapshot=snapshot,
+        limit=2,
+        min_score=0.0,
+        minimum_results=1,
+        minimum_top_score=0.0,
+        prefer_langgraph=False,
+    )
+
+    assert result.confidence == "grounded"
+    assert result.is_grounded is True
+    assert result.is_stale is False
+    assert result.is_llm_generated is False
+    assert result.insufficient_reason is None
+    assert result.sources[0].chunk.relative_path == "src/exports/options.py"
+    assert "CUSTOMER_EXPORT_STATUS" in result.sources[0].chunk.content
+    assert any("src/exports/options.py" in citation for citation in result.citations)
+    assert result.answer
+
 def test_ask_indexed_code_question_returns_insufficient_context(tmp_path: Path) -> None:
     source_file = tmp_path / "api.py"
     source_file.write_bytes(b"def health():\n    return {'status': 'ok'}\n")

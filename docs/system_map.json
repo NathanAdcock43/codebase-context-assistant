@@ -2468,6 +2468,7 @@
       "test_ask_indexed_code_question_can_generate_grounded_answer_with_injected_llm_client",
       "test_ask_indexed_code_question_downgrades_generated_self_refusal_confidence",
       "test_generated_answer_reports_insufficient_context_for_indexed_context_phrases",
+      "test_ask_indexed_code_question_uses_enriched_ticket_anchors_for_grounding",
       "test_ask_indexed_code_question_returns_insufficient_context",
       "test_ask_indexed_code_question_refuses_when_named_source_path_is_missing",
       "test_ask_indexed_code_question_does_not_call_llm_when_context_is_insufficient",
