@@ -8,6 +8,7 @@ FLOW: grounded_context_retrieval
 INPUTS:
 - IndexSnapshot records
 - developer query text
+- path-like query fragments when a question names a specific source file
 - search limit
 - search score threshold
 - minimum result count
@@ -15,6 +16,7 @@ INPUTS:
 
 OUTPUTS:
 - RetrievalResponse records with sufficiency decisions and grounded SearchResult records
+- insufficient-context refusals when a named source path is missing from retrieved results
 
 UPSTREAM:
 - JSON index store
@@ -32,6 +34,7 @@ DOWNSTREAM:
 OWNS:
 - retrieval orchestration over indexed chunks
 - retrieval sufficiency checks
+- requested source path presence checks
 - insufficient-context refusal reasons
 - loading indexed snapshots for retrieval
 - preserving grounded SearchResult records
@@ -59,14 +62,18 @@ NOTES:
 - This service does not generate answers.
 - It decides whether enough grounded context exists for a future answer step.
 - Keep refusal reasons plain and developer-facing.
+- If a query names a source path, retrieved context must include that path to be considered sufficient.
 """
 
+import re
 from pathlib import Path
 
 from code_context.index_store import DEFAULT_INDEX_FILENAME, JsonIndexStore
 from code_context.models import IndexSnapshot, RetrievalResponse
 from code_context.vector_store import search_chunks
 
+
+PATH_LIKE_PATTERN = re.compile(r"(?:[A-Za-z0-9_.-]+[\\/])+[A-Za-z0-9_.-]+\.[A-Za-z0-9_]+")
 
 DEFAULT_RETRIEVAL_MIN_SCORE = 0.001
 DEFAULT_MINIMUM_TOP_SCORE = 0.05
@@ -137,10 +144,12 @@ def retrieve_grounded_context(
         min_score=min_score,
     )
 
+    requested_paths = _extract_query_paths(normalized_query)
     insufficient_reason = _determine_insufficient_reason(
         results=results,
         minimum_results=minimum_results,
         minimum_top_score=minimum_top_score,
+        requested_paths=requested_paths,
     )
 
     return RetrievalResponse(
@@ -156,6 +165,7 @@ def _determine_insufficient_reason(
     results: list,
     minimum_results: int,
     minimum_top_score: float,
+    requested_paths: frozenset[str] | None = None,
 ) -> str | None:
     if len(results) < minimum_results:
         return "Not enough relevant indexed context was found."
@@ -164,7 +174,39 @@ def _determine_insufficient_reason(
     if top_score < minimum_top_score:
         return "The best retrieved context was below the sufficiency score threshold."
 
+    missing_requested_paths = _missing_requested_paths(requested_paths or frozenset(), results)
+    if missing_requested_paths:
+        formatted_paths = ", ".join(sorted(missing_requested_paths))
+        return f"The query asked about {formatted_paths}, but retrieved context did not include that file."
+
     return None
+
+
+def _extract_query_paths(query: str) -> frozenset[str]:
+    return frozenset(_normalize_path(match) for match in PATH_LIKE_PATTERN.findall(query))
+
+
+def _missing_requested_paths(requested_paths: frozenset[str], results: list) -> frozenset[str]:
+    if not requested_paths:
+        return frozenset()
+
+    result_paths = frozenset(_normalize_path(result.chunk.relative_path) for result in results)
+
+    missing_paths: set[str] = set()
+    for requested_path in requested_paths:
+        if not any(
+            requested_path == result_path
+            or requested_path.endswith(f"/{result_path}")
+            or result_path.endswith(f"/{requested_path}")
+            for result_path in result_paths
+        ):
+            missing_paths.add(requested_path)
+
+    return frozenset(missing_paths)
+
+
+def _normalize_path(path: str) -> str:
+    return path.strip().strip("'\"`.,:;()[]{}").replace("\\", "/").lstrip("./").lower()
 
 
 def _validate_retrieval_settings(

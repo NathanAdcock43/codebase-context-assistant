@@ -530,13 +530,15 @@
       "INPUTS": [
         "IndexSnapshot records",
         "developer query text",
+        "path-like query fragments when a question names a specific source file",
         "search limit",
         "search score threshold",
         "minimum result count",
         "minimum top score threshold"
       ],
       "OUTPUTS": [
-        "RetrievalResponse records with sufficiency decisions and grounded SearchResult records"
+        "RetrievalResponse records with sufficiency decisions and grounded SearchResult records",
+        "insufficient-context refusals when a named source path is missing from retrieved results"
       ],
       "UPSTREAM": [
         "JSON index store",
@@ -554,6 +556,7 @@
       "OWNS": [
         "retrieval orchestration over indexed chunks",
         "retrieval sufficiency checks",
+        "requested source path presence checks",
         "insufficient-context refusal reasons",
         "loading indexed snapshots for retrieval",
         "preserving grounded SearchResult records"
@@ -582,7 +585,8 @@
       "NOTES": [
         "This service does not generate answers.",
         "It decides whether enough grounded context exists for a future answer step.",
-        "Keep refusal reasons plain and developer-facing."
+        "Keep refusal reasons plain and developer-facing.",
+        "If a query names a source path, retrieved context must include that path to be considered sufficient."
       ]
     },
     "imports": [
@@ -590,7 +594,8 @@
       "code_context.index_store",
       "code_context.models",
       "code_context.vector_store",
-      "pathlib"
+      "pathlib",
+      "re"
     ],
     "internal_imports": [
       "code_context.index_store",
@@ -602,6 +607,9 @@
       "load_and_retrieve_context",
       "retrieve_grounded_context",
       "_determine_insufficient_reason",
+      "_extract_query_paths",
+      "_missing_requested_paths",
+      "_normalize_path",
       "_validate_retrieval_settings"
     ],
     "warnings": []
@@ -3473,11 +3481,13 @@
         "IndexSnapshot records",
         "sample SourceChunk records",
         "query text",
+        "path-like query fragments",
         "retrieval thresholds",
         "temporary index directories"
       ],
       "OUTPUTS": [
-        "retrieval response behavior assertions"
+        "retrieval response behavior assertions",
+        "requested source path sufficiency assertions"
       ],
       "UPSTREAM": [
         "retrieval service implementation",
@@ -3496,6 +3506,7 @@
       ],
       "OWNS": [
         "retrieval sufficiency tests",
+        "requested source path sufficiency tests",
         "insufficient context tests",
         "empty query tests",
         "threshold validation tests",
@@ -3545,6 +3556,7 @@
       "test_retrieve_grounded_context_marks_empty_index_as_insufficient",
       "test_retrieve_grounded_context_marks_no_matching_results_as_insufficient",
       "test_retrieve_grounded_context_marks_low_score_result_as_insufficient",
+      "test_retrieve_grounded_context_marks_named_missing_source_path_as_insufficient",
       "test_load_and_retrieve_context_loads_saved_snapshot",
       "test_retrieve_grounded_context_rejects_invalid_settings",
       "_snapshot",

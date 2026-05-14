@@ -9,11 +9,13 @@ INPUTS:
 - IndexSnapshot records
 - sample SourceChunk records
 - query text
+- path-like query fragments
 - retrieval thresholds
 - temporary index directories
 
 OUTPUTS:
 - retrieval response behavior assertions
+- requested source path sufficiency assertions
 
 UPSTREAM:
 - retrieval service implementation
@@ -32,6 +34,7 @@ DOWNSTREAM:
 
 OWNS:
 - retrieval sufficiency tests
+- requested source path sufficiency tests
 - insufficient context tests
 - empty query tests
 - threshold validation tests
@@ -168,6 +171,39 @@ def test_retrieve_grounded_context_marks_low_score_result_as_insufficient() -> N
     )
     assert response.results != []
 
+
+
+def test_retrieve_grounded_context_marks_named_missing_source_path_as_insufficient() -> None:
+    snapshot = _snapshot(
+        chunks=[
+            _chunk(
+                relative_path="src/code_context/ask.py",
+                content="def ask_indexed_code_question():\n    return None",
+            ),
+            _chunk(
+                relative_path="src/code_context/llm_factory.py",
+                content="def build_configured_llm_client():\n    return None",
+            ),
+        ]
+    )
+
+    response = retrieve_grounded_context(
+        snapshot=snapshot,
+        query="In src/code_context/api.py, explain where create_app is defined.",
+        limit=2,
+        min_score=0.0,
+        minimum_results=1,
+        minimum_top_score=0.0,
+    )
+
+    assert response.is_sufficient is False
+    assert response.insufficient_reason == (
+        "The query asked about src/code_context/api.py, but retrieved context did not include that file."
+    )
+    assert [result.chunk.relative_path for result in response.results] == [
+        "src/code_context/ask.py",
+        "src/code_context/llm_factory.py",
+    ]
 
 def test_load_and_retrieve_context_loads_saved_snapshot(tmp_path: Path) -> None:
     index_dir = tmp_path / ".code_context_index"
