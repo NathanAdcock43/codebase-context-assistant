@@ -10,25 +10,28 @@ INPUTS:
 - optional OpenAI SDK client instances
 - optional OpenAI API keys
 - OpenAI Responses API response objects
+- optional temperature settings from provider-neutral requests
 
 OUTPUTS:
 - provider-neutral LlmResponse records
 - OpenAiLlmClient instances
 - clear unavailable-client errors when the OpenAI SDK is not installed
 - clear response-shape errors when provider output is missing text
+- OpenAI requests that omit unsupported sampling parameters for selected models
 
 UPSTREAM:
 - LLM client boundary
 - AppConfig provider settings
-- future grounded answer generation service integration
-- future API and CLI LLM configuration wiring
+- grounded answer generation service
+- API ask LLM integration
+- CLI ask LLM integration
 - local tests with fake OpenAI clients
 
 DOWNSTREAM:
-- future generated ask responses
-- future FastAPI ask LLM integration
-- future CLI ask LLM integration
-- future provider configuration documentation
+- generated ask responses
+- FastAPI ask LLM integration
+- CLI ask LLM integration
+- provider configuration documentation
 
 OWNS:
 - OpenAI Responses API adapter behavior
@@ -37,6 +40,7 @@ OWNS:
 - OpenAI response text extraction
 - OpenAI usage metadata extraction
 - OpenAI response model fallback behavior
+- OpenAI-specific optional parameter filtering
 
 DOES_NOT_OWN:
 - prompt construction
@@ -61,9 +65,9 @@ STATE:
     - none
 
 NOTES:
-- This adapter is optional and is not wired into API or CLI yet.
 - Tests use fake clients and do not make network calls.
 - Keep this adapter behind the LlmClient protocol so provider details do not leak into prompt or answer generation code.
+- GPT-5 and o-series models may reject temperature, so this adapter omits temperature for those model families.
 """
 
 from collections.abc import Callable, Mapping
@@ -88,11 +92,15 @@ class OpenAiLlmClient:
         self._provider = provider
 
     def complete(self, request: LlmRequest) -> LlmResponse:
-        response = self._client.responses.create(
-            model=request.model,
-            input=_to_openai_input(request),
-            temperature=request.temperature,
-        )
+        request_kwargs: dict[str, Any] = {
+            "model": request.model,
+            "input": _to_openai_input(request),
+        }
+
+        if _should_send_temperature(request):
+            request_kwargs["temperature"] = request.temperature
+
+        response = self._client.responses.create(**request_kwargs)
 
         return LlmResponse(
             content=_extract_output_text(response),
@@ -135,6 +143,23 @@ def _load_openai_client_factory() -> Callable[..., Any]:
 
 def _to_openai_input(request: LlmRequest) -> list[dict[str, str]]:
     return [{"role": message.role, "content": message.content} for message in request.messages]
+
+
+def _should_send_temperature(request: LlmRequest) -> bool:
+    return request.temperature is not None and _model_supports_temperature(request.model)
+
+
+def _model_supports_temperature(model: str) -> bool:
+    normalized_model = model.strip().lower()
+
+    unsupported_prefixes = (
+        "gpt-5",
+        "o1",
+        "o3",
+        "o4",
+    )
+
+    return not normalized_model.startswith(unsupported_prefixes)
 
 
 def _extract_output_text(response: Any) -> str:

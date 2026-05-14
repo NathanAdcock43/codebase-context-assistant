@@ -15,7 +15,7 @@ INPUTS:
 - retrieval score thresholds
 - retrieval sufficiency thresholds
 - optional repository override for drift checks
-- optional generated-answer ask flags
+- optional generated-answer ask flags, including per-request model overrides
 
 OUTPUTS:
 - plain-text indexing summaries for terminal users
@@ -46,7 +46,7 @@ OWNS:
 - terminal output formatting
 - CLI error reporting
 - process exit code behavior
-- generated-answer ask flag forwarding
+- generated-answer ask flag and model override forwarding
 - generated-answer terminal metadata formatting
 
 DOES_NOT_OWN:
@@ -84,6 +84,7 @@ NOTES:
 - Keep CLI behavior thin and reuse application services.
 - Stale-index and insufficient-context refusals are successful command executions because the tool behaved correctly.
 - Generated answers must remain opt-in through --use-llm.
+- CLI callers may pass --llm-model to override the configured model for one request.
 - Operational failures such as missing repository paths or missing index files should return a non-zero exit code.
 """
 
@@ -223,8 +224,8 @@ def build_parser() -> argparse.ArgumentParser:
     ask_parser.add_argument(
         "--llm-temperature",
         type=float,
-        default=0.0,
-        help="LLM temperature for generated answers. Must be between 0.0 and 2.0.",
+        default=None,
+        help="Optional LLM temperature for generated answers. Must be between 0.0 and 2.0 when provided.",
     )
 
     drift_parser = subparsers.add_parser(

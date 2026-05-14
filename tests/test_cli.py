@@ -276,7 +276,7 @@ def test_cli_ask_routes_generated_answer_options_to_ask_service(
         prefer_langgraph: bool,
         use_llm: bool,
         llm_model: str | None,
-        llm_temperature: float,
+        llm_temperature: float | None,
     ) -> AskWorkflowResult:
         calls["question"] = question
         calls["snapshot"] = snapshot

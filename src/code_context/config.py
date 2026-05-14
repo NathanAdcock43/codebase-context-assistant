@@ -11,7 +11,7 @@ INPUTS:
 - project index directory setting
 - index filename setting
 - default text encoding setting
-- future LLM provider settings
+- LLM provider settings
 - future embedding provider settings
 - local API settings
 
@@ -24,7 +24,7 @@ UPSTREAM:
 - .env.example documentation
 - future CLI commands
 - future FastAPI startup configuration
-- future LLM answer generation slice
+- generated answer workflow configuration
 
 DOWNSTREAM:
 - scanner
@@ -32,7 +32,7 @@ DOWNSTREAM:
 - vector store
 - API configuration
 - CLI configuration
-- future LLM provider integration
+- LLM provider integration
 - local tooling
 
 OWNS:
@@ -42,7 +42,7 @@ OWNS:
 - default file encoding
 - environment variable parsing
 - typed runtime configuration shape
-- future provider configuration placeholders
+- provider configuration defaults
 
 DOES_NOT_OWN:
 - repository scanning
@@ -66,8 +66,8 @@ STATE:
 NOTES:
 - Keep this model small and explicit.
 - Do not load .env files directly in this module.
-- CLI and API arguments should still be able to override these defaults later.
-- LLM settings are configuration placeholders until a later LLM slice wires them into answer generation.
+- CLI and API ask requests can override the configured model per request.
+- Keep the source default stable; use OPENAI_MODEL, CLI flags, or API fields for model experiments.
 """
 
 import os
@@ -75,6 +75,9 @@ from collections.abc import Mapping
 from pathlib import Path
 
 from pydantic import BaseModel, Field, field_validator
+
+
+DEFAULT_OPENAI_MODEL = "gpt-4.1-mini"
 
 
 class AppConfig(BaseModel):
@@ -87,7 +90,7 @@ class AppConfig(BaseModel):
 
     llm_provider: str = "openai"
     openai_api_key: str | None = None
-    openai_model: str = "gpt-4.1-mini"
+    openai_model: str = DEFAULT_OPENAI_MODEL
 
     embedding_provider: str = "local"
     embedding_model: str | None = None
@@ -130,7 +133,7 @@ def load_app_config(environment: Mapping[str, str] | None = None) -> AppConfig:
         default_encoding=_get_env(env, "CODE_CONTEXT_DEFAULT_ENCODING", "utf-8"),
         llm_provider=_get_env(env, "LLM_PROVIDER", "openai"),
         openai_api_key=_get_optional_env(env, "OPENAI_API_KEY"),
-        openai_model=_get_env(env, "OPENAI_MODEL", "gpt-4.1-mini"),
+        openai_model=_get_env(env, "OPENAI_MODEL", DEFAULT_OPENAI_MODEL),
         embedding_provider=_get_env(env, "EMBEDDING_PROVIDER", "local"),
         embedding_model=_get_optional_env(env, "EMBEDDING_MODEL"),
         chroma_persist_dir=Path(_get_env(env, "CHROMA_PERSIST_DIR", ".chroma")),

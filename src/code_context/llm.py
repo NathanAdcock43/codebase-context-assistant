@@ -6,35 +6,39 @@ LAYER: llm
 FLOW: llm_client_boundary
 
 INPUTS:
-- future grounded answer prompts
-- future provider configuration
+- grounded answer prompts
+- provider configuration
 - model names
 - message lists
-- temperature settings
+- optional temperature settings
 
 OUTPUTS:
 - LlmMessage records
-- LlmRequest records
+- LlmRequest records with optional sampling parameters
 - LlmResponse records
 - LlmClient protocol
 - DisabledLlmClient placeholder behavior
 
 UPSTREAM:
-- future answer generation service
-- future responder node
-- future OpenAI provider adapter
+- answer generation service
+- responder node
+- OpenAI provider adapter
 - AppConfig provider settings
+- API ask requests
+- CLI ask requests
 - local tests
 
 DOWNSTREAM:
-- future LLM answer generation
-- future grounded response synthesis
-- future provider-specific clients
-- future API and CLI ask responses
+- LLM answer generation
+- grounded response synthesis
+- provider-specific clients
+- API ask responses
+- CLI ask responses
 
 OWNS:
 - provider-neutral LLM message shape
 - provider-neutral LLM request shape
+- optional temperature validation
 - provider-neutral LLM response shape
 - LLM client protocol
 - disabled client placeholder behavior
@@ -42,6 +46,7 @@ OWNS:
 
 DOES_NOT_OWN:
 - OpenAI SDK calls
+- provider-specific parameter support
 - prompt construction
 - retrieval
 - grounding verification
@@ -60,8 +65,8 @@ STATE:
     - none
 
 NOTES:
-- This module does not call an LLM yet.
-- Keep this provider-neutral so OpenAI or another provider can be added behind the same boundary.
+- Temperature is optional because some provider models reject sampling parameters.
+- Provider adapters decide which optional parameters are safe to send.
 - Future answer generation must still run only after stale-index and sufficiency checks pass.
 """
 
@@ -99,7 +104,7 @@ class LlmRequest(BaseModel):
 
     messages: list[LlmMessage]
     model: str
-    temperature: float = 0.2
+    temperature: float | None = None
 
     @field_validator("messages")
     @classmethod
@@ -120,7 +125,10 @@ class LlmRequest(BaseModel):
 
     @field_validator("temperature")
     @classmethod
-    def _temperature_must_be_in_range(cls, value: float) -> float:
+    def _temperature_must_be_in_range(cls, value: float | None) -> float | None:
+        if value is None:
+            return None
+
         if value < 0 or value > 2:
             msg = "LLM temperature must be between 0 and 2."
             raise ValueError(msg)
@@ -146,14 +154,14 @@ class LlmResponse(BaseModel):
 
 
 class LlmClient(Protocol):
-    """Protocol implemented by future provider-specific LLM clients."""
+    """Protocol implemented by provider-specific LLM clients."""
 
     def complete(self, request: LlmRequest) -> LlmResponse:
         """Return a completion for the given request."""
 
 
 class DisabledLlmClient:
-    """Placeholder client used until real LLM generation is wired in."""
+    """Placeholder client used when LLM generation is disabled."""
 
     def complete(self, request: LlmRequest) -> LlmResponse:
         raise LlmClientUnavailableError(
@@ -162,7 +170,7 @@ class DisabledLlmClient:
 
 
 def build_disabled_llm_client() -> LlmClient:
-    """Return the current placeholder LLM client."""
+    """Return the disabled LLM client."""
 
     return DisabledLlmClient()
 

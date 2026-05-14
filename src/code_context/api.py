@@ -11,7 +11,7 @@ INPUTS:
 - indexed chunk search requests
 - grounded retrieval requests
 - ask requests routed through the reusable ask workflow service
-- optional generated-answer ask requests
+- optional generated-answer ask requests with per-request model overrides
 - drift detection requests
 
 OUTPUTS:
@@ -45,7 +45,7 @@ OWNS:
 - HTTP error handling for missing indexes
 - local API route definitions
 - API response shaping for ask results
-- API opt-in fields for generated ask answers
+- API opt-in fields for generated ask answers, model overrides, and optional temperature settings
 
 DOES_NOT_OWN:
 - repository traversal
@@ -81,6 +81,7 @@ NOTES:
 - Keep endpoints thin and delegate core behavior to existing modules.
 - Ask delegates stale-index checks, workflow execution, and optional generated answers to the reusable ask service.
 - API ask defaults to deterministic grounded workflow answers unless use_llm is explicitly true.
+- API callers may pass llm_model to override the configured model for one request.
 """
 
 from pathlib import Path
@@ -175,7 +176,7 @@ class AskRequest(BaseModel):
     index_filename: str = Field(default=DEFAULT_INDEX_FILENAME)
     use_llm: bool = False
     llm_model: str | None = None
-    llm_temperature: float = Field(default=0.0, ge=0.0, le=2.0)
+    llm_temperature: float | None = Field(default=None, ge=0.0, le=2.0)
 
 
 class AskSourceResponse(BaseModel):

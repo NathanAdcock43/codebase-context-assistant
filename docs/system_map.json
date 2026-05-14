@@ -14,7 +14,7 @@
         "indexed chunk search requests",
         "grounded retrieval requests",
         "ask requests routed through the reusable ask workflow service",
-        "optional generated-answer ask requests",
+        "optional generated-answer ask requests with per-request model overrides",
         "drift detection requests"
       ],
       "OUTPUTS": [
@@ -48,7 +48,7 @@
         "HTTP error handling for missing indexes",
         "local API route definitions",
         "API response shaping for ask results",
-        "API opt-in fields for generated ask answers"
+        "API opt-in fields for generated ask answers, model overrides, and optional temperature settings"
       ],
       "DOES_NOT_OWN": [
         "repository traversal",
@@ -85,7 +85,8 @@
       "NOTES": [
         "Keep endpoints thin and delegate core behavior to existing modules.",
         "Ask delegates stale-index checks, workflow execution, and optional generated answers to the reusable ask service.",
-        "API ask defaults to deterministic grounded workflow answers unless use_llm is explicitly true."
+        "API ask defaults to deterministic grounded workflow answers unless use_llm is explicitly true.",
+        "API callers may pass llm_model to override the configured model for one request."
       ]
     },
     "imports": [
@@ -1169,7 +1170,7 @@
         "project index directory setting",
         "index filename setting",
         "default text encoding setting",
-        "future LLM provider settings",
+        "LLM provider settings",
         "future embedding provider settings",
         "local API settings"
       ],
@@ -1182,7 +1183,7 @@
         ".env.example documentation",
         "future CLI commands",
         "future FastAPI startup configuration",
-        "future LLM answer generation slice"
+        "generated answer workflow configuration"
       ],
       "DOWNSTREAM": [
         "scanner",
@@ -1190,7 +1191,7 @@
         "vector store",
         "API configuration",
         "CLI configuration",
-        "future LLM provider integration",
+        "LLM provider integration",
         "local tooling"
       ],
       "OWNS": [
@@ -1200,7 +1201,7 @@
         "default file encoding",
         "environment variable parsing",
         "typed runtime configuration shape",
-        "future provider configuration placeholders"
+        "provider configuration defaults"
       ],
       "DOES_NOT_OWN": [
         "repository scanning",
@@ -1226,8 +1227,8 @@
       "NOTES": [
         "Keep this model small and explicit.",
         "Do not load .env files directly in this module.",
-        "CLI and API arguments should still be able to override these defaults later.",
-        "LLM settings are configuration placeholders until a later LLM slice wires them into answer generation."
+        "CLI and API ask requests can override the configured model per request.",
+        "Keep the source default stable; use OPENAI_MODEL, CLI flags, or API fields for model experiments."
       ]
     },
     "imports": [
@@ -1926,6 +1927,7 @@
     ],
     "functions": [
       "test_generate_grounded_answer_calls_injected_client_and_returns_answer",
+      "test_generate_grounded_answer_omits_temperature_by_default",
       "test_generate_grounded_answer_builds_grounded_prompt_request",
       "test_generate_grounded_answer_limits_sources_sent_to_client_and_result",
       "test_build_grounded_source_references_maps_search_results",
@@ -2016,12 +2018,19 @@
     },
     "imports": [
       "__future__",
+      "code_context.agent.state",
       "code_context.api",
+      "code_context.ask",
+      "code_context.models",
       "fastapi.testclient",
-      "pathlib"
+      "pathlib",
+      "typing"
     ],
     "internal_imports": [
-      "code_context.api"
+      "code_context.agent.state",
+      "code_context.api",
+      "code_context.ask",
+      "code_context.models"
     ],
     "classes": [],
     "functions": [
@@ -2037,7 +2046,8 @@
       "test_ask_endpoint_refuses_when_index_is_stale",
       "test_ask_endpoint_returns_404_when_index_is_missing",
       "test_drift_endpoint_reports_modified_file_after_indexing",
-      "test_drift_endpoint_returns_404_when_index_is_missing"
+      "test_drift_endpoint_returns_404_when_index_is_missing",
+      "test_ask_endpoint_routes_llm_model_override_without_temperature"
     ],
     "warnings": []
   },
@@ -3170,6 +3180,8 @@
       "test_build_openai_llm_client_uses_injected_client_factory_without_importing_sdk",
       "test_build_openai_llm_client_allows_sdk_to_read_environment_when_api_key_is_not_passed",
       "test_build_openai_llm_client_raises_clear_error_when_openai_sdk_is_missing",
+      "test_openai_llm_client_omits_temperature_when_request_temperature_is_none",
+      "test_openai_llm_client_omits_temperature_for_gpt_5_models",
       "_request"
     ],
     "warnings": []
@@ -3730,7 +3742,7 @@
         "verified grounded SearchResult records",
         "provider-neutral LlmClient implementations",
         "LLM model names",
-        "prompt temperature settings",
+        "optional prompt temperature settings",
         "source result limits",
         "source content character limits"
       ],
@@ -3787,6 +3799,7 @@
       "NOTES": [
         "This module does not create a real provider client.",
         "This module should only be called after stale-index and sufficiency checks pass.",
+        "Temperature is optional because some provider models reject sampling parameters.",
         "Tests use fake clients so no provider key or network call is required."
       ]
     },
@@ -3966,7 +3979,7 @@
         "retrieval score thresholds",
         "retrieval sufficiency thresholds",
         "optional repository override for drift checks",
-        "optional generated-answer ask flags"
+        "optional generated-answer ask flags, including per-request model overrides"
       ],
       "OUTPUTS": [
         "plain-text indexing summaries for terminal users",
@@ -3997,7 +4010,7 @@
         "terminal output formatting",
         "CLI error reporting",
         "process exit code behavior",
-        "generated-answer ask flag forwarding",
+        "generated-answer ask flag and model override forwarding",
         "generated-answer terminal metadata formatting"
       ],
       "DOES_NOT_OWN": [
@@ -4037,6 +4050,7 @@
         "Keep CLI behavior thin and reuse application services.",
         "Stale-index and insufficient-context refusals are successful command executions because the tool behaved correctly.",
         "Generated answers must remain opt-in through --use-llm.",
+        "CLI callers may pass --llm-model to override the configured model for one request.",
         "Operational failures such as missing repository paths or missing index files should return a non-zero exit code."
       ]
     },
@@ -4089,35 +4103,39 @@
       "LAYER": "llm",
       "FLOW": "llm_client_boundary",
       "INPUTS": [
-        "future grounded answer prompts",
-        "future provider configuration",
+        "grounded answer prompts",
+        "provider configuration",
         "model names",
         "message lists",
-        "temperature settings"
+        "optional temperature settings"
       ],
       "OUTPUTS": [
         "LlmMessage records",
-        "LlmRequest records",
+        "LlmRequest records with optional sampling parameters",
         "LlmResponse records",
         "LlmClient protocol",
         "DisabledLlmClient placeholder behavior"
       ],
       "UPSTREAM": [
-        "future answer generation service",
-        "future responder node",
-        "future OpenAI provider adapter",
+        "answer generation service",
+        "responder node",
+        "OpenAI provider adapter",
         "AppConfig provider settings",
+        "API ask requests",
+        "CLI ask requests",
         "local tests"
       ],
       "DOWNSTREAM": [
-        "future LLM answer generation",
-        "future grounded response synthesis",
-        "future provider-specific clients",
-        "future API and CLI ask responses"
+        "LLM answer generation",
+        "grounded response synthesis",
+        "provider-specific clients",
+        "API ask responses",
+        "CLI ask responses"
       ],
       "OWNS": [
         "provider-neutral LLM message shape",
         "provider-neutral LLM request shape",
+        "optional temperature validation",
         "provider-neutral LLM response shape",
         "LLM client protocol",
         "disabled client placeholder behavior",
@@ -4125,6 +4143,7 @@
       ],
       "DOES_NOT_OWN": [
         "OpenAI SDK calls",
+        "provider-specific parameter support",
         "prompt construction",
         "retrieval",
         "grounding verification",
@@ -4145,8 +4164,8 @@
         ]
       },
       "NOTES": [
-        "This module does not call an LLM yet.",
-        "Keep this provider-neutral so OpenAI or another provider can be added behind the same boundary.",
+        "Temperature is optional because some provider models reject sampling parameters.",
+        "Provider adapters decide which optional parameters are safe to send.",
         "Future answer generation must still run only after stale-index and sufficiency checks pass."
       ]
     },
@@ -4275,26 +4294,29 @@
         "provider-neutral LlmRequest records",
         "optional OpenAI SDK client instances",
         "optional OpenAI API keys",
-        "OpenAI Responses API response objects"
+        "OpenAI Responses API response objects",
+        "optional temperature settings from provider-neutral requests"
       ],
       "OUTPUTS": [
         "provider-neutral LlmResponse records",
         "OpenAiLlmClient instances",
         "clear unavailable-client errors when the OpenAI SDK is not installed",
-        "clear response-shape errors when provider output is missing text"
+        "clear response-shape errors when provider output is missing text",
+        "OpenAI requests that omit unsupported sampling parameters for selected models"
       ],
       "UPSTREAM": [
         "LLM client boundary",
         "AppConfig provider settings",
-        "future grounded answer generation service integration",
-        "future API and CLI LLM configuration wiring",
+        "grounded answer generation service",
+        "API ask LLM integration",
+        "CLI ask LLM integration",
         "local tests with fake OpenAI clients"
       ],
       "DOWNSTREAM": [
-        "future generated ask responses",
-        "future FastAPI ask LLM integration",
-        "future CLI ask LLM integration",
-        "future provider configuration documentation"
+        "generated ask responses",
+        "FastAPI ask LLM integration",
+        "CLI ask LLM integration",
+        "provider configuration documentation"
       ],
       "OWNS": [
         "OpenAI Responses API adapter behavior",
@@ -4302,7 +4324,8 @@
         "provider-neutral request to OpenAI request conversion",
         "OpenAI response text extraction",
         "OpenAI usage metadata extraction",
-        "OpenAI response model fallback behavior"
+        "OpenAI response model fallback behavior",
+        "OpenAI-specific optional parameter filtering"
       ],
       "DOES_NOT_OWN": [
         "prompt construction",
@@ -4329,9 +4352,9 @@
         ]
       },
       "NOTES": [
-        "This adapter is optional and is not wired into API or CLI yet.",
         "Tests use fake clients and do not make network calls.",
-        "Keep this adapter behind the LlmClient protocol so provider details do not leak into prompt or answer generation code."
+        "Keep this adapter behind the LlmClient protocol so provider details do not leak into prompt or answer generation code.",
+        "GPT-5 and o-series models may reject temperature, so this adapter omits temperature for those model families."
       ]
     },
     "imports": [
@@ -4352,6 +4375,8 @@
       "build_openai_llm_client",
       "_load_openai_client_factory",
       "_to_openai_input",
+      "_should_send_temperature",
+      "_model_supports_temperature",
       "_extract_output_text",
       "_extract_response_model",
       "_extract_usage"

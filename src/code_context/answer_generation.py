@@ -10,7 +10,7 @@ INPUTS:
 - verified grounded SearchResult records
 - provider-neutral LlmClient implementations
 - LLM model names
-- prompt temperature settings
+- optional prompt temperature settings
 - source result limits
 - source content character limits
 
@@ -65,6 +65,7 @@ STATE:
 NOTES:
 - This module does not create a real provider client.
 - This module should only be called after stale-index and sufficiency checks pass.
+- Temperature is optional because some provider models reject sampling parameters.
 - Tests use fake clients so no provider key or network call is required.
 """
 
@@ -136,7 +137,7 @@ def generate_grounded_answer(
     results: Sequence[SearchResult],
     client: LlmClient,
     model: str,
-    temperature: float = 0.2,
+    temperature: float | None = None,
     max_results: int = 5,
     max_source_chars_per_result: int = 1200,
 ) -> GeneratedAnswer:

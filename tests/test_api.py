@@ -72,10 +72,15 @@ NOTES:
 """
 
 from pathlib import Path
+from typing import Any
 
 from fastapi.testclient import TestClient
 
+import code_context.api as api_module
+from code_context.agent.state import AgentStepStatus, create_initial_state
 from code_context.api import create_app
+from code_context.ask import AskWorkflowResult
+from code_context.models import IndexSnapshot
 
 
 def test_health_endpoint_returns_ok() -> None:
@@ -501,3 +506,109 @@ def test_drift_endpoint_returns_404_when_index_is_missing(tmp_path: Path) -> Non
 
     assert response.status_code == 404
     assert "Index file does not exist" in response.json()["detail"]
+
+def test_ask_endpoint_routes_llm_model_override_without_temperature(
+    monkeypatch: Any,
+    tmp_path: Path,
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    source_file = repo / "scanner.py"
+    source_file.write_bytes(
+        b"def calculate_file_hash(path):\n"
+        b"    return hashlib.sha256(path.read_bytes()).hexdigest()\n"
+    )
+
+    index_dir = tmp_path / ".code_context_index"
+    client = TestClient(create_app())
+
+    index_response = client.post(
+        "/index",
+        json={
+            "repo_path": str(repo),
+            "index_dir": str(index_dir),
+            "max_lines": 10,
+            "overlap_lines": 0,
+        },
+    )
+    assert index_response.status_code == 200
+
+    calls: dict[str, object] = {}
+
+    def fake_ask_service(
+        *,
+        question: str,
+        snapshot: IndexSnapshot,
+        limit: int,
+        min_score: float,
+        minimum_results: int,
+        minimum_top_score: float,
+        prefer_langgraph: bool,
+        use_llm: bool,
+        llm_model: str | None,
+        llm_temperature: float | None,
+    ) -> AskWorkflowResult:
+        calls["question"] = question
+        calls["snapshot"] = snapshot
+        calls["limit"] = limit
+        calls["min_score"] = min_score
+        calls["minimum_results"] = minimum_results
+        calls["minimum_top_score"] = minimum_top_score
+        calls["prefer_langgraph"] = prefer_langgraph
+        calls["use_llm"] = use_llm
+        calls["llm_model"] = llm_model
+        calls["llm_temperature"] = llm_temperature
+
+        state = create_initial_state(question)
+        completed_steps = [
+            step.model_copy(update={"status": AgentStepStatus.completed})
+            for step in state.steps
+        ]
+
+        return AskWorkflowResult(
+            question=question,
+            answer="fake generated API answer",
+            confidence="grounded_generated",
+            is_grounded=True,
+            is_stale=False,
+            insufficient_reason=None,
+            plan=["Use generated answer path."],
+            citations=["scanner.py:1-2"],
+            sources=[],
+            steps=completed_steps,
+            is_llm_generated=True,
+            llm_provider="fake",
+            llm_model=llm_model,
+            llm_usage={"input_tokens": 12, "output_tokens": 8},
+        )
+
+    monkeypatch.setattr(api_module, "ask_indexed_code_question", fake_ask_service)
+
+    ask_response = client.post(
+        "/ask",
+        json={
+            "index_dir": str(index_dir),
+            "question": "Where is calculate file hash handled?",
+            "limit": 3,
+            "use_llm": True,
+            "llm_model": "gpt-5.5",
+        },
+    )
+
+    body = ask_response.json()
+
+    assert ask_response.status_code == 200
+    assert body["confidence"] == "grounded_generated"
+    assert body["is_llm_generated"] is True
+    assert body["llm_provider"] == "fake"
+    assert body["llm_model"] == "gpt-5.5"
+
+    assert calls["question"] == "Where is calculate file hash handled?"
+    assert isinstance(calls["snapshot"], IndexSnapshot)
+    assert calls["limit"] == 3
+    assert calls["prefer_langgraph"] is True
+    assert calls["use_llm"] is True
+    assert calls["llm_model"] == "gpt-5.5"
+    assert calls["llm_temperature"] is None
+

@@ -102,7 +102,7 @@ def test_ask_endpoint_routes_through_ask_workflow_service(
         prefer_langgraph: bool,
         use_llm: bool,
         llm_model: str | None,
-        llm_temperature: float,
+        llm_temperature: float | None,
     ) -> AskWorkflowResult:
         calls["question"] = question
         calls["snapshot"] = snapshot
@@ -193,7 +193,7 @@ def test_ask_endpoint_routes_through_ask_workflow_service(
     assert calls["prefer_langgraph"] is True
     assert calls["use_llm"] is False
     assert calls["llm_model"] is None
-    assert calls["llm_temperature"] == 0.0
+    assert calls["llm_temperature"] is None
 
 
 def test_ask_endpoint_routes_generated_answer_request_fields_to_ask_service(

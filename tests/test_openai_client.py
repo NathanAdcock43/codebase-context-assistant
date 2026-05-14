@@ -238,6 +238,43 @@ def test_build_openai_llm_client_raises_clear_error_when_openai_sdk_is_missing(m
         build_openai_llm_client()
 
 
+def test_openai_llm_client_omits_temperature_when_request_temperature_is_none() -> None:
+    sdk_client = FakeOpenAiSdkClient(FakeOpenAiResponse())
+    client = OpenAiLlmClient(sdk_client)
+
+    client.complete(_request())
+
+    call = sdk_client.responses.calls[0]
+
+    assert "temperature" not in call
+
+
+def test_openai_llm_client_omits_temperature_for_gpt_5_models() -> None:
+    sdk_client = FakeOpenAiSdkClient(FakeOpenAiResponse())
+    client = OpenAiLlmClient(sdk_client)
+
+    client.complete(
+        LlmRequest(
+            messages=[
+                LlmMessage(role="system", content="Use only grounded context."),
+                LlmMessage(role="user", content="Where is the API created?"),
+            ],
+            model="gpt-5.5",
+            temperature=0.1,
+        )
+    )
+
+    call = sdk_client.responses.calls[0]
+
+    assert call == {
+        "model": "gpt-5.5",
+        "input": [
+            {"role": "system", "content": "Use only grounded context."},
+            {"role": "user", "content": "Where is the API created?"},
+        ],
+    }
+
+
 def _request(*, model: str = "test-model") -> LlmRequest:
     return LlmRequest(
         messages=[

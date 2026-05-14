@@ -125,6 +125,35 @@ def test_generate_grounded_answer_calls_injected_client_and_returns_answer() -> 
     assert client.requests
 
 
+def test_generate_grounded_answer_omits_temperature_by_default() -> None:
+    client = FakeLlmClient(
+        LlmResponse(
+            content="Answer from grounded context.",
+            model="test-model",
+            provider="test-provider",
+        )
+    )
+
+    generate_grounded_answer(
+        question="Where is the API created?",
+        results=[
+            _result(
+                relative_path="src/code_context/api.py",
+                start_line=15,
+                end_line=30,
+                content="def create_app():\n    return app",
+            )
+        ],
+        client=client,
+        model="test-model",
+    )
+
+    request = client.requests[0]
+
+    assert request.model == "test-model"
+    assert request.temperature is None
+
+
 def test_generate_grounded_answer_builds_grounded_prompt_request() -> None:
     client = FakeLlmClient(
         LlmResponse(
