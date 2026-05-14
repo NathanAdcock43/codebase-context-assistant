@@ -18,6 +18,7 @@ OUTPUTS:
 - retrieval response behavior assertions
 - enriched retrieval query assertions
 - generic ticket anchor retrieval assertions
+- weak trailing result pruning assertions
 - requested source path sufficiency assertions
 
 UPSTREAM:
@@ -39,6 +40,7 @@ OWNS:
 - retrieval sufficiency tests
 - retrieval query enrichment tests
 - generic ticket-style anchor retrieval tests
+- weak trailing result pruning tests
 - requested source path sufficiency tests
 - insufficient context tests
 - empty query tests
@@ -242,6 +244,53 @@ def test_retrieve_grounded_context_uses_enriched_query_text_for_search(monkeypat
     assert captured_queries[0].count("BFN_FSCL_YR_END_OPT") > response.query.count("BFN_FSCL_YR_END_OPT")
     assert captured_queries[0].count("CREATE_CLASS_1_4") > response.query.count("CREATE_CLASS_1_4")
 
+
+
+def test_retrieve_grounded_context_prunes_weak_trailing_results() -> None:
+    snapshot = _snapshot(
+        chunks=[
+            _chunk(
+                chunk_id="src/exports/options.py:1-6",
+                relative_path="src/exports/options.py",
+                content=(
+                    "class ExportRunOptions:\n"
+                    "    CUSTOMER_EXPORT_STATUS = 'N'\n"
+                    "    def apply_export_status(self):\n"
+                    "        return CUSTOMER_EXPORT_STATUS\n"
+                ),
+            ),
+            _chunk(
+                chunk_id="src/navigation/menu.py:1-6",
+                relative_path="src/navigation/menu.py",
+                content=(
+                    "class NavigationMenu:\n"
+                    "    def render_user_menu(self):\n"
+                    "        return 'menu'\n"
+                ),
+            ),
+        ]
+    )
+
+    query = """
+    TASK-123
+    Data change request
+    Add CUSTOMER_EXPORT_STATUS to EXPORT_RUN_OPTIONS.
+    Users need an option to control export status during run setup.
+    """
+
+    response = retrieve_grounded_context(
+        snapshot=snapshot,
+        query=query,
+        limit=2,
+        min_score=0.0,
+        minimum_results=1,
+        minimum_top_score=0.0,
+    )
+
+    assert response.is_sufficient is True
+    assert [result.chunk.relative_path for result in response.results] == [
+        "src/exports/options.py",
+    ]
 
 def test_retrieve_grounded_context_uses_enriched_ticket_anchors_for_real_search() -> None:
     snapshot = _snapshot(

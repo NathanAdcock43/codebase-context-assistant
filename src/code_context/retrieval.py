@@ -18,6 +18,7 @@ INPUTS:
 
 OUTPUTS:
 - RetrievalResponse records with sufficiency decisions and grounded SearchResult records
+- pruned retrieval results that drop weak trailing matches
 - insufficient-context refusals when a named source path is missing from retrieved results
 
 UPSTREAM:
@@ -37,6 +38,7 @@ OWNS:
 - retrieval orchestration over indexed chunks
 - deterministic retrieval query enrichment before vector search
 - retrieval sufficiency checks
+- weak trailing result pruning
 - requested source path presence checks
 - insufficient-context refusal reasons
 - loading indexed snapshots for retrieval
@@ -65,6 +67,7 @@ NOTES:
 - This service does not generate answers.
 - It decides whether enough grounded context exists for a future answer step.
 - Keep refusal reasons plain and developer-facing.
+- Keep the strongest result and prune trailing results that are far below the top score.
 - Preserve the original user query in responses even when enriched search text is used internally.
 - If a query names a source path, retrieved context must include that path to be considered sufficient.
 """
@@ -78,6 +81,7 @@ from code_context.vector_store import search_chunks
 
 DEFAULT_RETRIEVAL_MIN_SCORE = 0.001
 DEFAULT_MINIMUM_TOP_SCORE = 0.05
+DEFAULT_RELATIVE_RESULT_SCORE_FLOOR = 0.10
 
 
 def load_and_retrieve_context(
@@ -145,6 +149,7 @@ def retrieve_grounded_context(
         limit=limit,
         min_score=min_score,
     )
+    results = _prune_weak_trailing_results(results)
 
     requested_paths = extract_query_paths(normalized_query)
     insufficient_reason = _determine_insufficient_reason(
@@ -160,6 +165,27 @@ def retrieve_grounded_context(
         insufficient_reason=insufficient_reason,
         results=results,
     )
+
+
+def _prune_weak_trailing_results(
+    results: list,
+    *,
+    relative_score_floor: float = DEFAULT_RELATIVE_RESULT_SCORE_FLOOR,
+) -> list:
+    if not results:
+        return results
+
+    top_score = results[0].score
+    if top_score <= 0:
+        return results
+
+    minimum_relative_score = top_score * relative_score_floor
+
+    return [
+        result
+        for index, result in enumerate(results)
+        if index == 0 or result.score >= minimum_relative_score
+    ]
 
 
 def _determine_insufficient_reason(

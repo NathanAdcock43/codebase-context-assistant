@@ -641,6 +641,7 @@
       ],
       "OUTPUTS": [
         "RetrievalResponse records with sufficiency decisions and grounded SearchResult records",
+        "pruned retrieval results that drop weak trailing matches",
         "insufficient-context refusals when a named source path is missing from retrieved results"
       ],
       "UPSTREAM": [
@@ -660,6 +661,7 @@
         "retrieval orchestration over indexed chunks",
         "deterministic retrieval query enrichment before vector search",
         "retrieval sufficiency checks",
+        "weak trailing result pruning",
         "requested source path presence checks",
         "insufficient-context refusal reasons",
         "loading indexed snapshots for retrieval",
@@ -690,6 +692,7 @@
         "This service does not generate answers.",
         "It decides whether enough grounded context exists for a future answer step.",
         "Keep refusal reasons plain and developer-facing.",
+        "Keep the strongest result and prune trailing results that are far below the top score.",
         "Preserve the original user query in responses even when enriched search text is used internally.",
         "If a query names a source path, retrieved context must include that path to be considered sufficient."
       ]
@@ -712,6 +715,7 @@
     "functions": [
       "load_and_retrieve_context",
       "retrieve_grounded_context",
+      "_prune_weak_trailing_results",
       "_determine_insufficient_reason",
       "_missing_requested_paths",
       "_normalize_path",
@@ -3696,6 +3700,7 @@
         "retrieval response behavior assertions",
         "enriched retrieval query assertions",
         "generic ticket anchor retrieval assertions",
+        "weak trailing result pruning assertions",
         "requested source path sufficiency assertions"
       ],
       "UPSTREAM": [
@@ -3717,6 +3722,7 @@
         "retrieval sufficiency tests",
         "retrieval query enrichment tests",
         "generic ticket-style anchor retrieval tests",
+        "weak trailing result pruning tests",
         "requested source path sufficiency tests",
         "insufficient context tests",
         "empty query tests",
@@ -3769,6 +3775,7 @@
       "test_retrieve_grounded_context_marks_low_score_result_as_insufficient",
       "test_retrieve_grounded_context_marks_named_missing_source_path_as_insufficient",
       "test_retrieve_grounded_context_uses_enriched_query_text_for_search",
+      "test_retrieve_grounded_context_prunes_weak_trailing_results",
       "test_retrieve_grounded_context_uses_enriched_ticket_anchors_for_real_search",
       "test_load_and_retrieve_context_loads_saved_snapshot",
       "test_retrieve_grounded_context_rejects_invalid_settings",
