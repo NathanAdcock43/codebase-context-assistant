@@ -3675,6 +3675,7 @@
       "test_build_retrieval_query_returns_stripped_query_when_no_anchors_exist",
       "test_build_retrieval_query_repeats_database_identifiers_for_ticket_search",
       "test_build_retrieval_query_includes_ui_phrase_anchors",
+      "test_extract_query_anchors_handles_single_word_title_phrase_candidate",
       "test_extract_query_anchors_marks_plain_fuzzy_question_as_weak"
     ],
     "warnings": []

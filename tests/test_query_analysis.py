@@ -187,6 +187,12 @@ def test_build_retrieval_query_includes_ui_phrase_anchors() -> None:
     assert retrieval_query.count("Create Password") >= 2
     assert retrieval_query.count("Confirm Password") >= 2
 
+
+def test_extract_query_anchors_handles_single_word_title_phrase_candidate() -> None:
+    anchors = extract_query_anchors("Menu")
+
+    assert anchors.title_phrases == ()
+
 def test_extract_query_anchors_marks_plain_fuzzy_question_as_weak() -> None:
     anchors = extract_query_anchors("Where does this come from?")
 
