@@ -17,6 +17,7 @@ INPUTS:
 
 OUTPUTS:
 - QueryAnchors behavior assertions
+- retrieval query enrichment assertions
 - path normalization assertions
 - issue key extraction assertions
 - database identifier extraction assertions
@@ -36,6 +37,7 @@ DOWNSTREAM:
 
 OWNS:
 - deterministic query anchor tests
+- deterministic retrieval query enrichment tests
 - fuzzy ticket anchor tests
 - source path normalization tests
 - strong-anchor detection tests
@@ -62,7 +64,7 @@ NOTES:
 - The query analysis module should extract anchors, not infer implementation facts.
 """
 
-from code_context.query_analysis import extract_query_anchors, extract_query_paths
+from code_context.query_analysis import build_retrieval_query, extract_query_anchors, extract_query_paths
 
 
 def test_extract_query_paths_normalizes_source_paths() -> None:
@@ -124,6 +126,36 @@ def test_extract_query_anchors_extracts_quoted_ui_phrases() -> None:
     assert anchors.quoted_phrases == ("Confirm Password", "Create Password")
     assert anchors.has_strong_anchors is True
 
+
+
+def test_build_retrieval_query_returns_stripped_query_when_no_anchors_exist() -> None:
+    retrieval_query = build_retrieval_query("  Where does this come from?  ")
+
+    assert retrieval_query == "Where does this come from?"
+
+
+def test_build_retrieval_query_repeats_database_identifiers_for_ticket_search() -> None:
+    ticket_text = """
+    AMP-14751
+    Postgres - Liquibase - BFN_FSCL_YR_END_OPT add new column for CREATE_CLASS_1_4
+    Add new column for CREATE_CLASS_1_4 VARCHAR(1) NOT NULL DEFAULT 'N';
+    """
+
+    retrieval_query = build_retrieval_query(ticket_text)
+
+    assert retrieval_query.splitlines()[0] == "AMP-14751"
+    assert retrieval_query.count("BFN_FSCL_YR_END_OPT") >= 3
+    assert retrieval_query.count("CREATE_CLASS_1_4") >= 4
+    assert "AMP-14751" in retrieval_query
+
+
+def test_build_retrieval_query_includes_ui_phrase_anchors() -> None:
+    retrieval_query = build_retrieval_query(
+        'Where is "Create Password" displayed near "Confirm Password"?'
+    )
+
+    assert retrieval_query.count("Create Password") >= 2
+    assert retrieval_query.count("Confirm Password") >= 2
 
 def test_extract_query_anchors_marks_plain_fuzzy_question_as_weak() -> None:
     anchors = extract_query_anchors("Where does this come from?")

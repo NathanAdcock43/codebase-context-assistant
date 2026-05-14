@@ -14,6 +14,7 @@ INPUTS:
 
 OUTPUTS:
 - QueryAnchors records
+- enriched deterministic retrieval query text
 - normalized source path anchors
 - issue key anchors
 - database identifier anchors
@@ -29,12 +30,14 @@ UPSTREAM:
 
 DOWNSTREAM:
 - vector retrieval query construction
+- retrieval query enrichment
 - retrieval sufficiency checks
 - future query expansion service
 - future lightweight LLM query rewrite service
 
 OWNS:
 - deterministic query anchor extraction
+- deterministic retrieval query enrichment
 - path-like text normalization
 - issue key detection
 - database identifier detection
@@ -65,6 +68,7 @@ NOTES:
 - This module is intentionally deterministic.
 - It gives fuzzy ticket retrieval a safer first pass before any model-based query expansion.
 - It should extract anchors, not infer facts about the codebase.
+- Query enrichment repeats extracted anchors to improve recall without adding guessed terms.
 """
 
 import re
@@ -170,6 +174,36 @@ def extract_query_paths(query: str) -> frozenset[str]:
     """Extract normalized source paths from query text."""
 
     return frozenset(_normalize_path(match) for match in PATH_LIKE_PATTERN.findall(query))
+
+
+def build_retrieval_query(query: str) -> str:
+    """Build deterministic search text from a query and its extracted anchors."""
+
+    normalized_query = query.strip()
+    if not normalized_query:
+        return ""
+
+    anchors = extract_query_anchors(normalized_query)
+    anchor_lines = _anchor_lines(anchors)
+
+    if not anchor_lines:
+        return normalized_query
+
+    return "\n".join([normalized_query, *anchor_lines])
+
+
+def _anchor_lines(anchors: QueryAnchors) -> tuple[str, ...]:
+    lines: list[str] = []
+
+    lines.extend(anchors.paths)
+    lines.extend(anchors.database_identifiers)
+    lines.extend(anchors.database_identifiers)
+    lines.extend(anchors.code_identifiers)
+    lines.extend(anchors.quoted_phrases)
+    lines.extend(anchors.title_phrases)
+    lines.extend(anchors.issue_keys)
+
+    return tuple(line for line in lines if line)
 
 
 def _extract_code_identifiers(query: str) -> tuple[str, ...]:

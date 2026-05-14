@@ -536,6 +536,7 @@
       ],
       "OUTPUTS": [
         "QueryAnchors records",
+        "enriched deterministic retrieval query text",
         "normalized source path anchors",
         "issue key anchors",
         "database identifier anchors",
@@ -551,12 +552,14 @@
       ],
       "DOWNSTREAM": [
         "vector retrieval query construction",
+        "retrieval query enrichment",
         "retrieval sufficiency checks",
         "future query expansion service",
         "future lightweight LLM query rewrite service"
       ],
       "OWNS": [
         "deterministic query anchor extraction",
+        "deterministic retrieval query enrichment",
         "path-like text normalization",
         "issue key detection",
         "database identifier detection",
@@ -588,7 +591,8 @@
       "NOTES": [
         "This module is intentionally deterministic.",
         "It gives fuzzy ticket retrieval a safer first pass before any model-based query expansion.",
-        "It should extract anchors, not infer facts about the codebase."
+        "It should extract anchors, not infer facts about the codebase.",
+        "Query enrichment repeats extracted anchors to improve recall without adding guessed terms."
       ]
     },
     "imports": [
@@ -603,6 +607,8 @@
     "functions": [
       "extract_query_anchors",
       "extract_query_paths",
+      "build_retrieval_query",
+      "_anchor_lines",
       "_extract_code_identifiers",
       "_looks_like_code_identifier",
       "_extract_title_phrases",
@@ -3589,6 +3595,7 @@
       ],
       "OUTPUTS": [
         "QueryAnchors behavior assertions",
+        "retrieval query enrichment assertions",
         "path normalization assertions",
         "issue key extraction assertions",
         "database identifier extraction assertions",
@@ -3608,6 +3615,7 @@
       ],
       "OWNS": [
         "deterministic query anchor tests",
+        "deterministic retrieval query enrichment tests",
         "fuzzy ticket anchor tests",
         "source path normalization tests",
         "strong-anchor detection tests"
@@ -3649,6 +3657,9 @@
       "test_extract_query_anchors_extracts_database_ticket_identifiers",
       "test_extract_query_anchors_extracts_password_ticket_phrases",
       "test_extract_query_anchors_extracts_quoted_ui_phrases",
+      "test_build_retrieval_query_returns_stripped_query_when_no_anchors_exist",
+      "test_build_retrieval_query_repeats_database_identifiers_for_ticket_search",
+      "test_build_retrieval_query_includes_ui_phrase_anchors",
       "test_extract_query_anchors_marks_plain_fuzzy_question_as_weak"
     ],
     "warnings": []
