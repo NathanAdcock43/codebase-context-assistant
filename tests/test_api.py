@@ -381,6 +381,58 @@ def test_ask_endpoint_refuses_when_context_is_insufficient(tmp_path: Path) -> No
     assert body["answer"]
 
 
+
+def test_ask_endpoint_refuses_when_named_source_path_is_missing(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    ask_file = repo / "src" / "code_context" / "ask.py"
+    llm_factory_file = repo / "src" / "code_context" / "llm_factory.py"
+    ask_file.parent.mkdir(parents=True)
+    ask_file.write_bytes(b"def ask_indexed_code_question():\n    return None\n")
+    llm_factory_file.write_bytes(b"def build_configured_llm_client():\n    return None\n")
+
+    index_dir = tmp_path / ".code_context_index"
+    client = TestClient(create_app())
+
+    index_response = client.post(
+        "/index",
+        json={
+            "repo_path": str(repo),
+            "index_dir": str(index_dir),
+            "max_lines": 10,
+            "overlap_lines": 0,
+        },
+    )
+    assert index_response.status_code == 200
+
+    ask_response = client.post(
+        "/ask",
+        json={
+            "index_dir": str(index_dir),
+            "question": "In src/code_context/api.py, explain where create_app is defined.",
+            "limit": 2,
+            "min_score": 0.0,
+            "minimum_results": 1,
+            "minimum_top_score": 0.0,
+        },
+    )
+
+    body = ask_response.json()
+
+    assert ask_response.status_code == 200
+    assert body["confidence"] == "insufficient_context"
+    assert body["is_grounded"] is False
+    assert body["is_stale"] is False
+    assert body["is_llm_generated"] is False
+    assert body["insufficient_reason"] == (
+        "The query asked about src/code_context/api.py, but retrieved context did not include that file."
+    )
+    assert [source["relative_path"] for source in body["sources"]] == [
+        "src/code_context/ask.py",
+        "src/code_context/llm_factory.py",
+    ]
+    assert body["citations"] == []
+    assert body["answer"]
+
 def test_ask_endpoint_refuses_when_index_is_stale(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()
