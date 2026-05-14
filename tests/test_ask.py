@@ -10,6 +10,7 @@ INPUTS:
 - temporary source files
 - IndexSnapshot records
 - developer question text
+- path-like source path questions
 - retrieval thresholds
 - modified source files that make indexed context stale
 - monkeypatched optional workflow adapter calls
@@ -19,6 +20,7 @@ OUTPUTS:
 - ask workflow service behavior assertions
 - stale-index LLM guardrail assertions
 - insufficient-context LLM guardrail assertions
+- named source path insufficiency assertions
 - generated answer metadata assertions
 - generated self-refusal phrase detection assertions
 
@@ -43,6 +45,7 @@ DOWNSTREAM:
 OWNS:
 - ask service grounded answer tests
 - ask service insufficient-context tests
+- ask service named source path insufficiency tests
 - ask service stale-index refusal tests
 - ask service optional LangGraph adapter invocation tests
 - ask service generated answer tests
@@ -308,6 +311,65 @@ def test_ask_indexed_code_question_returns_insufficient_context(tmp_path: Path) 
     assert result.citations == []
     assert result.answer
 
+
+
+def test_ask_indexed_code_question_refuses_when_named_source_path_is_missing(
+    tmp_path: Path,
+) -> None:
+    ask_file = tmp_path / "src" / "code_context" / "ask.py"
+    llm_factory_file = tmp_path / "src" / "code_context" / "llm_factory.py"
+    ask_file.parent.mkdir(parents=True)
+    ask_file.write_bytes(b"def ask_indexed_code_question():\n    return None\n")
+    llm_factory_file.write_bytes(b"def build_configured_llm_client():\n    return None\n")
+
+    snapshot = _snapshot(
+        repo_root=tmp_path,
+        files=[
+            _file_metadata(ask_file, "src/code_context/ask.py"),
+            _file_metadata(llm_factory_file, "src/code_context/llm_factory.py"),
+        ],
+        chunks=[
+            _chunk(
+                chunk_id="src/code_context/ask.py:1-2",
+                relative_path="src/code_context/ask.py",
+                content="def ask_indexed_code_question():\n    return None\n",
+            ),
+            _chunk(
+                chunk_id="src/code_context/llm_factory.py:1-2",
+                relative_path="src/code_context/llm_factory.py",
+                content="def build_configured_llm_client():\n    return None\n",
+            ),
+        ],
+    )
+    fake_llm = FakeLlmClient()
+
+    result = ask_module.ask_indexed_code_question(
+        question="In src/code_context/api.py, explain where create_app is defined.",
+        snapshot=snapshot,
+        limit=2,
+        min_score=0.0,
+        minimum_results=1,
+        minimum_top_score=0.0,
+        prefer_langgraph=False,
+        use_llm=True,
+        llm_client=fake_llm,
+        llm_model="fake-model",
+    )
+
+    assert result.confidence == "insufficient_context"
+    assert result.is_grounded is False
+    assert result.is_stale is False
+    assert result.is_llm_generated is False
+    assert result.insufficient_reason == (
+        "The query asked about src/code_context/api.py, but retrieved context did not include that file."
+    )
+    assert [source.chunk.relative_path for source in result.sources] == [
+        "src/code_context/ask.py",
+        "src/code_context/llm_factory.py",
+    ]
+    assert result.citations == []
+    assert result.answer
+    assert fake_llm.requests == []
 
 def test_ask_indexed_code_question_does_not_call_llm_when_context_is_insufficient(tmp_path: Path) -> None:
     source_file = tmp_path / "api.py"
