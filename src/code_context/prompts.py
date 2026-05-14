@@ -19,21 +19,21 @@ OUTPUTS:
 - user prompt text with source references
 
 UPSTREAM:
-- retrieval service
-- verifier node
-- future LLM answer generation service
+- grounded answer generation service
+- verified retrieval results from the retrieval and verifier path
 - future responder node LLM integration
 - local tests
 
 DOWNSTREAM:
 - LLM client boundary
-- future OpenAI provider adapter
-- future grounded answer synthesis
-- future API and CLI ask responses
+- OpenAI provider adapter
+- generated answer synthesis
+- API and CLI generated ask responses
 
 OWNS:
 - grounded answer system prompt text
 - grounded answer user prompt construction
+- generated answer source-use rules
 - source context formatting
 - source content truncation
 - prompt input validation
@@ -60,7 +60,8 @@ STATE:
 NOTES:
 - This module does not call an LLM.
 - This prompt builder should only be used after stale-index and sufficiency checks have passed.
-- The prompt tells the future LLM to answer only from supplied sources and to refuse if the sources are insufficient.
+- The prompt tells the configured LLM to answer only from supplied sources and to refuse if the sources are insufficient.
+- The prompt should discourage speculative wording such as likely, probably, or inferred endpoint behavior.
 """
 
 from collections.abc import Sequence
@@ -76,7 +77,12 @@ Answer the developer question using only the supplied source context.
 
 Rules:
 - Use only the provided sources.
-- Do not invent files, functions, behavior, or architecture.
+- Treat the supplied source chunks as the complete evidence available for this answer.
+- Do not invent files, functions, endpoints, behavior, architecture, or relationships.
+- Do not say that a file, endpoint, function, or behavior likely exists.
+- Do not include hypothetical code blocks or reconstructed implementations unless the exact code appears in the supplied sources.
+- When listing endpoints, functions, classes, or files, list only items visible in the supplied sources.
+- If documentation mentions a capability but the implementation is not visible in the supplied sources, say that directly.
 - Cite relevant file paths and line ranges in the answer.
 - If the supplied sources are not enough, say that the indexed context is insufficient.
 - Keep the answer practical and implementation-focused.
@@ -138,6 +144,9 @@ def build_grounded_answer_user_prompt(
             "Answer requirements:",
             "- Answer only from the grounded source context above.",
             "- Include file paths and line ranges when referencing implementation details.",
+            "- Do not infer hidden endpoints, files, functions, or behavior from naming patterns.",
+            "- Do not use speculative phrases such as likely, probably, or similar when describing implementation details.",
+            "- If documentation mentions a capability but implementation code is not visible in the supplied context, say that directly.",
             "- If these sources are insufficient, say so directly instead of guessing.",
         ]
     )

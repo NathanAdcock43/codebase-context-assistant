@@ -20,21 +20,22 @@ OUTPUTS:
 
 UPSTREAM:
 - prompt builder module
+- grounded answer generation service
 - LLM client boundary
 - SearchResult model
 - SourceChunk model
-- future LLM answer generation service
 
 DOWNSTREAM:
 - local test runs
 - future CI guardrails
-- future OpenAI provider tests
-- future grounded answer generation tests
+- OpenAI provider adapter tests
+- grounded answer generation tests
 - future responder node LLM integration tests
 - system map review
 
 OWNS:
 - grounded answer prompt tests
+- generated answer source-use rule tests
 - source context formatting tests
 - prompt validation tests
 - source truncation tests
@@ -99,6 +100,19 @@ def test_build_grounded_answer_request_creates_system_and_user_messages() -> Non
     assert "Lines: 10-20" in request.messages[1].content
 
 
+
+def test_grounded_answer_system_prompt_rejects_speculation_and_hypothetical_code() -> None:
+    assert "Treat the supplied source chunks as the complete evidence available" in (
+        DEFAULT_GROUNDED_ANSWER_SYSTEM_PROMPT
+    )
+    assert "Do not say that a file, endpoint, function, or behavior likely exists." in (
+        DEFAULT_GROUNDED_ANSWER_SYSTEM_PROMPT
+    )
+    assert "Do not include hypothetical code blocks or reconstructed implementations" in (
+        DEFAULT_GROUNDED_ANSWER_SYSTEM_PROMPT
+    )
+    assert "list only items visible in the supplied sources" in DEFAULT_GROUNDED_ANSWER_SYSTEM_PROMPT
+
 def test_build_grounded_answer_user_prompt_includes_answer_rules() -> None:
     prompt = build_grounded_answer_user_prompt(
         question="How does drift detection work?",
@@ -116,6 +130,8 @@ def test_build_grounded_answer_user_prompt_includes_answer_rules() -> None:
     assert "Grounded source context:" in prompt
     assert "Answer requirements:" in prompt
     assert "Answer only from the grounded source context above." in prompt
+    assert "Do not infer hidden endpoints, files, functions, or behavior from naming patterns." in prompt
+    assert "Do not use speculative phrases such as likely, probably, or similar" in prompt
     assert "If these sources are insufficient, say so directly instead of guessing." in prompt
 
 

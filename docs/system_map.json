@@ -3516,21 +3516,22 @@
       ],
       "UPSTREAM": [
         "prompt builder module",
+        "grounded answer generation service",
         "LLM client boundary",
         "SearchResult model",
-        "SourceChunk model",
-        "future LLM answer generation service"
+        "SourceChunk model"
       ],
       "DOWNSTREAM": [
         "local test runs",
         "future CI guardrails",
-        "future OpenAI provider tests",
-        "future grounded answer generation tests",
+        "OpenAI provider adapter tests",
+        "grounded answer generation tests",
         "future responder node LLM integration tests",
         "system map review"
       ],
       "OWNS": [
         "grounded answer prompt tests",
+        "generated answer source-use rule tests",
         "source context formatting tests",
         "prompt validation tests",
         "source truncation tests"
@@ -3573,6 +3574,7 @@
     "classes": [],
     "functions": [
       "test_build_grounded_answer_request_creates_system_and_user_messages",
+      "test_grounded_answer_system_prompt_rejects_speculation_and_hypothetical_code",
       "test_build_grounded_answer_user_prompt_includes_answer_rules",
       "test_build_grounded_answer_user_prompt_limits_result_count",
       "test_format_search_result_context_includes_source_metadata_and_content",
@@ -4648,21 +4650,21 @@
         "user prompt text with source references"
       ],
       "UPSTREAM": [
-        "retrieval service",
-        "verifier node",
-        "future LLM answer generation service",
+        "grounded answer generation service",
+        "verified retrieval results from the retrieval and verifier path",
         "future responder node LLM integration",
         "local tests"
       ],
       "DOWNSTREAM": [
         "LLM client boundary",
-        "future OpenAI provider adapter",
-        "future grounded answer synthesis",
-        "future API and CLI ask responses"
+        "OpenAI provider adapter",
+        "generated answer synthesis",
+        "API and CLI generated ask responses"
       ],
       "OWNS": [
         "grounded answer system prompt text",
         "grounded answer user prompt construction",
+        "generated answer source-use rules",
         "source context formatting",
         "source content truncation",
         "prompt input validation"
@@ -4691,7 +4693,8 @@
       "NOTES": [
         "This module does not call an LLM.",
         "This prompt builder should only be used after stale-index and sufficiency checks have passed.",
-        "The prompt tells the future LLM to answer only from supplied sources and to refuse if the sources are insufficient."
+        "The prompt tells the configured LLM to answer only from supplied sources and to refuse if the sources are insufficient.",
+        "The prompt should discourage speculative wording such as likely, probably, or inferred endpoint behavior."
       ]
     },
     "imports": [
