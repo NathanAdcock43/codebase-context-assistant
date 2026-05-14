@@ -23,6 +23,7 @@ OUTPUTS:
 - database identifier extraction assertions
 - code identifier extraction assertions
 - UI phrase extraction assertions
+- domain-neutral heuristic assertions
 
 UPSTREAM:
 - query analysis module
@@ -62,6 +63,7 @@ STATE:
 NOTES:
 - These tests protect the deterministic layer before any optional model-based query expansion is added.
 - The query analysis module should extract anchors, not infer implementation facts.
+- Domain-specific ticket terms may appear in test samples, but not in production heuristic lists.
 """
 
 from code_context.query_analysis import build_retrieval_query, extract_query_anchors, extract_query_paths
@@ -97,6 +99,16 @@ def test_extract_query_anchors_extracts_database_ticket_identifiers() -> None:
     assert "VARCHAR" in anchors.code_identifiers
     assert anchors.has_strong_anchors is True
 
+
+
+def test_extract_query_anchors_keeps_title_phrase_detection_domain_neutral() -> None:
+    anchors = extract_query_anchors(
+        "For Update Billing Status and Review Export Queue, find the likely files."
+    )
+
+    assert "Update Billing Status" in anchors.title_phrases
+    assert "Review Export Queue" in anchors.title_phrases
+    assert anchors.has_strong_anchors is False
 
 def test_extract_query_anchors_extracts_password_ticket_phrases() -> None:
     ticket_text = """

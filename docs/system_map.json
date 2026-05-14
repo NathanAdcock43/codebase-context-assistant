@@ -3604,7 +3604,8 @@
         "issue key extraction assertions",
         "database identifier extraction assertions",
         "code identifier extraction assertions",
-        "UI phrase extraction assertions"
+        "UI phrase extraction assertions",
+        "domain-neutral heuristic assertions"
       ],
       "UPSTREAM": [
         "query analysis module",
@@ -3645,7 +3646,8 @@
       },
       "NOTES": [
         "These tests protect the deterministic layer before any optional model-based query expansion is added.",
-        "The query analysis module should extract anchors, not infer implementation facts."
+        "The query analysis module should extract anchors, not infer implementation facts.",
+        "Domain-specific ticket terms may appear in test samples, but not in production heuristic lists."
       ]
     },
     "imports": [
@@ -3659,6 +3661,7 @@
     "functions": [
       "test_extract_query_paths_normalizes_source_paths",
       "test_extract_query_anchors_extracts_database_ticket_identifiers",
+      "test_extract_query_anchors_keeps_title_phrase_detection_domain_neutral",
       "test_extract_query_anchors_extracts_password_ticket_phrases",
       "test_extract_query_anchors_extracts_quoted_ui_phrases",
       "test_build_retrieval_query_returns_stripped_query_when_no_anchors_exist",
