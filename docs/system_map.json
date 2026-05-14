@@ -3694,6 +3694,7 @@
       "OUTPUTS": [
         "retrieval response behavior assertions",
         "enriched retrieval query assertions",
+        "generic ticket anchor retrieval assertions",
         "requested source path sufficiency assertions"
       ],
       "UPSTREAM": [
@@ -3714,6 +3715,7 @@
       "OWNS": [
         "retrieval sufficiency tests",
         "retrieval query enrichment tests",
+        "generic ticket-style anchor retrieval tests",
         "requested source path sufficiency tests",
         "insufficient context tests",
         "empty query tests",
@@ -3766,6 +3768,7 @@
       "test_retrieve_grounded_context_marks_low_score_result_as_insufficient",
       "test_retrieve_grounded_context_marks_named_missing_source_path_as_insufficient",
       "test_retrieve_grounded_context_uses_enriched_query_text_for_search",
+      "test_retrieve_grounded_context_uses_enriched_ticket_anchors_for_real_search",
       "test_load_and_retrieve_context_loads_saved_snapshot",
       "test_retrieve_grounded_context_rejects_invalid_settings",
       "_snapshot",
