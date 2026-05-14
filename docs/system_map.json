@@ -3506,13 +3506,15 @@
         "sample SearchResult records",
         "sample SourceChunk records",
         "model names",
-        "prompt construction limits"
+        "prompt construction limits",
+        "adjacent same-file source chunks"
       ],
       "OUTPUTS": [
         "LlmRequest construction assertions",
         "grounded source formatting assertions",
         "prompt validation assertions",
-        "source truncation assertions"
+        "source truncation assertions",
+        "adjacent same-file source merge assertions"
       ],
       "UPSTREAM": [
         "prompt builder module",
@@ -3532,6 +3534,7 @@
       "OWNS": [
         "grounded answer prompt tests",
         "generated answer source-use rule tests",
+        "adjacent same-file source merge tests",
         "source context formatting tests",
         "prompt validation tests",
         "source truncation tests"
@@ -3577,6 +3580,8 @@
       "test_grounded_answer_system_prompt_rejects_speculation_and_hypothetical_code",
       "test_build_grounded_answer_user_prompt_includes_answer_rules",
       "test_build_grounded_answer_user_prompt_limits_result_count",
+      "test_build_grounded_answer_user_prompt_merges_adjacent_same_file_chunks",
+      "test_merge_adjacent_results_for_prompt_does_not_merge_different_files",
       "test_format_search_result_context_includes_source_metadata_and_content",
       "test_truncate_source_content_adds_marker_when_content_is_too_long",
       "test_truncate_source_content_keeps_short_content_unchanged",
@@ -4642,12 +4647,14 @@
         "LLM model name",
         "prompt temperature setting",
         "result count limits",
-        "source content character limits"
+        "source content character limits",
+        "adjacent same-file retrieval chunks for generated answer context"
       ],
       "OUTPUTS": [
         "provider-neutral LlmRequest records",
         "system prompt text",
-        "user prompt text with source references"
+        "user prompt text with source references",
+        "user prompt source blocks with adjacent same-file chunks merged for continuity"
       ],
       "UPSTREAM": [
         "grounded answer generation service",
@@ -4665,6 +4672,7 @@
         "grounded answer system prompt text",
         "grounded answer user prompt construction",
         "generated answer source-use rules",
+        "adjacent same-file source chunk merging for prompt context",
         "source context formatting",
         "source content truncation",
         "prompt input validation"
@@ -4694,25 +4702,34 @@
         "This module does not call an LLM.",
         "This prompt builder should only be used after stale-index and sufficiency checks have passed.",
         "The prompt tells the configured LLM to answer only from supplied sources and to refuse if the sources are insufficient.",
-        "The prompt should discourage speculative wording such as likely, probably, or inferred endpoint behavior."
+        "The prompt should discourage speculative wording such as likely, probably, or inferred endpoint behavior.",
+        "Adjacent chunks from the same file should be merged for generated-answer prompt context when possible."
       ]
     },
     "imports": [
       "__future__",
       "code_context.llm",
       "code_context.models",
-      "collections.abc"
+      "collections.abc",
+      "dataclasses"
     ],
     "internal_imports": [
       "code_context.llm",
       "code_context.models"
     ],
-    "classes": [],
+    "classes": [
+      "_PromptSource"
+    ],
     "functions": [
       "build_grounded_answer_request",
       "build_grounded_answer_user_prompt",
       "format_search_result_context",
+      "merge_adjacent_results_for_prompt",
       "truncate_source_content",
+      "_merge_adjacent_results_for_prompt",
+      "_can_merge_results",
+      "_merge_search_results",
+      "_merge_chunk_content",
       "_normalize_question",
       "_select_results",
       "_validate_source_limit"

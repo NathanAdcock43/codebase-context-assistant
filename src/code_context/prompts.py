@@ -12,11 +12,13 @@ INPUTS:
 - prompt temperature setting
 - result count limits
 - source content character limits
+- adjacent same-file retrieval chunks for generated answer context
 
 OUTPUTS:
 - provider-neutral LlmRequest records
 - system prompt text
 - user prompt text with source references
+- user prompt source blocks with adjacent same-file chunks merged for continuity
 
 UPSTREAM:
 - grounded answer generation service
@@ -34,6 +36,7 @@ OWNS:
 - grounded answer system prompt text
 - grounded answer user prompt construction
 - generated answer source-use rules
+- adjacent same-file source chunk merging for prompt context
 - source context formatting
 - source content truncation
 - prompt input validation
@@ -62,12 +65,20 @@ NOTES:
 - This prompt builder should only be used after stale-index and sufficiency checks have passed.
 - The prompt tells the configured LLM to answer only from supplied sources and to refuse if the sources are insufficient.
 - The prompt should discourage speculative wording such as likely, probably, or inferred endpoint behavior.
+- Adjacent chunks from the same file should be merged for generated-answer prompt context when possible.
 """
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 
 from code_context.llm import LlmMessage, LlmRequest
-from code_context.models import SearchResult
+from code_context.models import SearchResult, SourceChunk
+
+
+@dataclass(frozen=True)
+class _PromptSource:
+    result: SearchResult
+    merged_chunk_count: int
 
 
 DEFAULT_GROUNDED_ANSWER_SYSTEM_PROMPT = """
@@ -130,9 +141,15 @@ def build_grounded_answer_user_prompt(
     selected_results = _select_results(results, max_results=max_results)
     _validate_source_limit(max_source_chars_per_result)
 
+    prompt_sources = _merge_adjacent_results_for_prompt(selected_results)
+
     source_blocks = [
-        format_search_result_context(result, source_number=index, max_source_chars=max_source_chars_per_result)
-        for index, result in enumerate(selected_results, start=1)
+        format_search_result_context(
+            prompt_source.result,
+            source_number=index,
+            max_source_chars=max_source_chars_per_result * prompt_source.merged_chunk_count,
+        )
+        for index, prompt_source in enumerate(prompt_sources, start=1)
     ]
 
     return "\n\n".join(
@@ -177,6 +194,12 @@ def format_search_result_context(result: SearchResult, *, source_number: int, ma
     )
 
 
+def merge_adjacent_results_for_prompt(results: Sequence[SearchResult]) -> list[SearchResult]:
+    """Merge adjacent same-file retrieval results into continuous prompt context blocks."""
+
+    return [prompt_source.result for prompt_source in _merge_adjacent_results_for_prompt(results)]
+
+
 def truncate_source_content(content: str, *, max_chars: int) -> str:
     """Truncate source content for prompt safety while preserving a clear marker."""
 
@@ -190,6 +213,85 @@ def truncate_source_content(content: str, *, max_chars: int) -> str:
         return marker[-max_chars:]
 
     return f"{content[: max_chars - len(marker)].rstrip()}{marker}"
+
+
+def _merge_adjacent_results_for_prompt(results: Sequence[SearchResult]) -> list[_PromptSource]:
+    if not results:
+        return []
+
+    prompt_sources: list[_PromptSource] = []
+
+    current_result = results[0]
+    current_count = 1
+
+    for next_result in results[1:]:
+        if _can_merge_results(current_result, next_result):
+            current_result = _merge_search_results(current_result, next_result)
+            current_count += 1
+            continue
+
+        prompt_sources.append(_PromptSource(result=current_result, merged_chunk_count=current_count))
+        current_result = next_result
+        current_count = 1
+
+    prompt_sources.append(_PromptSource(result=current_result, merged_chunk_count=current_count))
+
+    return prompt_sources
+
+
+def _can_merge_results(left: SearchResult, right: SearchResult) -> bool:
+    left_chunk = left.chunk
+    right_chunk = right.chunk
+
+    return (
+        left_chunk.relative_path == right_chunk.relative_path
+        and left_chunk.language == right_chunk.language
+        and right_chunk.start_line >= left_chunk.start_line
+        and right_chunk.start_line <= left_chunk.end_line + 1
+    )
+
+
+def _merge_search_results(left: SearchResult, right: SearchResult) -> SearchResult:
+    left_chunk = left.chunk
+    right_chunk = right.chunk
+    merged_start_line = left_chunk.start_line
+    merged_end_line = max(left_chunk.end_line, right_chunk.end_line)
+    merged_content = _merge_chunk_content(
+        left_content=left_chunk.content,
+        left_end_line=left_chunk.end_line,
+        right_content=right_chunk.content,
+        right_start_line=right_chunk.start_line,
+    )
+
+    return SearchResult(
+        chunk=SourceChunk(
+            chunk_id=f"{left_chunk.relative_path}:{merged_start_line}-{merged_end_line}:merged",
+            relative_path=left_chunk.relative_path,
+            start_line=merged_start_line,
+            end_line=merged_end_line,
+            content=merged_content,
+            language=left_chunk.language,
+        ),
+        score=max(left.score, right.score),
+    )
+
+
+def _merge_chunk_content(
+    *,
+    left_content: str,
+    left_end_line: int,
+    right_content: str,
+    right_start_line: int,
+) -> str:
+    left_lines = left_content.splitlines()
+    right_lines = right_content.splitlines()
+    overlapping_line_count = max(0, left_end_line - right_start_line + 1)
+
+    if overlapping_line_count >= len(right_lines):
+        return "\n".join(left_lines)
+
+    merged_lines = [*left_lines, *right_lines[overlapping_line_count:]]
+    return "\n".join(merged_lines)
 
 
 def _normalize_question(question: str) -> str:

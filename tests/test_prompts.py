@@ -11,12 +11,14 @@ INPUTS:
 - sample SourceChunk records
 - model names
 - prompt construction limits
+- adjacent same-file source chunks
 
 OUTPUTS:
 - LlmRequest construction assertions
 - grounded source formatting assertions
 - prompt validation assertions
 - source truncation assertions
+- adjacent same-file source merge assertions
 
 UPSTREAM:
 - prompt builder module
@@ -36,6 +38,7 @@ DOWNSTREAM:
 OWNS:
 - grounded answer prompt tests
 - generated answer source-use rule tests
+- adjacent same-file source merge tests
 - source context formatting tests
 - prompt validation tests
 - source truncation tests
@@ -71,6 +74,7 @@ from code_context.prompts import (
     build_grounded_answer_request,
     build_grounded_answer_user_prompt,
     format_search_result_context,
+    merge_adjacent_results_for_prompt,
     truncate_source_content,
 )
 
@@ -147,6 +151,56 @@ def test_build_grounded_answer_user_prompt_limits_result_count() -> None:
 
     assert "first.py" in prompt
     assert "second.py" not in prompt
+
+
+
+def test_build_grounded_answer_user_prompt_merges_adjacent_same_file_chunks() -> None:
+    prompt = build_grounded_answer_user_prompt(
+        question="Where are API endpoints defined?",
+        results=[
+            _result(
+                relative_path="src/code_context/api.py",
+                start_line=1,
+                end_line=3,
+                content="line 1\nline 2\nline 3",
+            ),
+            _result(
+                relative_path="src/code_context/api.py",
+                start_line=3,
+                end_line=5,
+                content="line 3\nline 4\nline 5",
+            ),
+            _result(
+                relative_path="docs/project_brief.md",
+                start_line=1,
+                end_line=2,
+                content="brief 1\nbrief 2",
+                language="markdown",
+            ),
+        ],
+        max_source_chars_per_result=80,
+    )
+
+    assert "Source 1:" in prompt
+    assert "File: src/code_context/api.py" in prompt
+    assert "Lines: 1-5" in prompt
+    assert prompt.count("line 3") == 1
+    assert "line 4" in prompt
+    assert "line 5" in prompt
+    assert "Source 2:" in prompt
+    assert "File: docs/project_brief.md" in prompt
+    assert "Source 3:" not in prompt
+
+
+def test_merge_adjacent_results_for_prompt_does_not_merge_different_files() -> None:
+    merged_results = merge_adjacent_results_for_prompt(
+        [
+            _result(relative_path="first.py", start_line=1, end_line=2, content="first"),
+            _result(relative_path="second.py", start_line=3, end_line=4, content="second"),
+        ]
+    )
+
+    assert [result.chunk.relative_path for result in merged_results] == ["first.py", "second.py"]
 
 
 def test_format_search_result_context_includes_source_metadata_and_content() -> None:
