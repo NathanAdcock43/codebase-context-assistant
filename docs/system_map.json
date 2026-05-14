@@ -2164,6 +2164,7 @@
       "test_retrieve_endpoint_returns_404_when_index_is_missing",
       "test_ask_endpoint_returns_grounded_answer_from_agent_workflow",
       "test_ask_endpoint_refuses_when_context_is_insufficient",
+      "test_ask_endpoint_prunes_weak_trailing_sources",
       "test_ask_endpoint_refuses_when_named_source_path_is_missing",
       "test_ask_endpoint_refuses_when_index_is_stale",
       "test_ask_endpoint_returns_404_when_index_is_missing",

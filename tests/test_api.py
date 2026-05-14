@@ -382,6 +382,70 @@ def test_ask_endpoint_refuses_when_context_is_insufficient(tmp_path: Path) -> No
 
 
 
+
+def test_ask_endpoint_prunes_weak_trailing_sources(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    export_file = repo / "src" / "exports" / "options.py"
+    menu_file = repo / "src" / "navigation" / "menu.py"
+    export_file.parent.mkdir(parents=True)
+    menu_file.parent.mkdir(parents=True)
+
+    export_file.write_bytes(
+        b"class ExportRunOptions:\n"
+        b"    CUSTOMER_EXPORT_STATUS = 'N'\n"
+        b"    def apply_export_status(self):\n"
+        b"        return CUSTOMER_EXPORT_STATUS\n"
+    )
+    menu_file.write_bytes(
+        b"class NavigationMenu:\n"
+        b"    def render_user_menu(self):\n"
+        b"        return 'menu'\n"
+    )
+
+    index_dir = tmp_path / ".code_context_index"
+    client = TestClient(create_app())
+
+    index_response = client.post(
+        "/index",
+        json={
+            "repo_path": str(repo),
+            "index_dir": str(index_dir),
+            "max_lines": 20,
+            "overlap_lines": 0,
+        },
+    )
+    assert index_response.status_code == 200
+
+    ask_response = client.post(
+        "/ask",
+        json={
+            "index_dir": str(index_dir),
+            "question": (
+                "TASK-123\n"
+                "Data change request\n"
+                "Add CUSTOMER_EXPORT_STATUS to EXPORT_RUN_OPTIONS.\n"
+                "Users need an option to control export status during run setup."
+            ),
+            "limit": 2,
+            "min_score": 0.0,
+            "minimum_results": 1,
+            "minimum_top_score": 0.0,
+        },
+    )
+
+    body = ask_response.json()
+
+    assert ask_response.status_code == 200
+    assert body["confidence"] == "grounded"
+    assert body["is_grounded"] is True
+    assert body["is_stale"] is False
+    assert body["is_llm_generated"] is False
+    assert [source["relative_path"] for source in body["sources"]] == [
+        "src/exports/options.py",
+    ]
+    assert body["citations"] == ["src/exports/options.py:1-4"]
+    assert "src/navigation/menu.py" not in body["answer"]
+
 def test_ask_endpoint_refuses_when_named_source_path_is_missing(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     ask_file = repo / "src" / "code_context" / "ask.py"
