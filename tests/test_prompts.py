@@ -12,6 +12,7 @@ INPUTS:
 - model names
 - prompt construction limits
 - adjacent same-file source chunks
+- long source blocks with structural code markers
 
 OUTPUTS:
 - LlmRequest construction assertions
@@ -20,6 +21,7 @@ OUTPUTS:
 - source truncation assertions
 - source head/tail truncation assertions
 - adjacent same-file source merge assertions
+- structural outline assertions
 
 UPSTREAM:
 - prompt builder module
@@ -40,6 +42,7 @@ OWNS:
 - grounded answer prompt tests
 - generated answer source-use rule tests
 - adjacent same-file source merge tests
+- structural outline tests
 - source context formatting tests
 - prompt validation tests
 - source truncation tests
@@ -75,6 +78,7 @@ from code_context.prompts import (
     DEFAULT_GROUNDED_ANSWER_SYSTEM_PROMPT,
     build_grounded_answer_request,
     build_grounded_answer_user_prompt,
+    build_source_outline,
     format_search_result_context,
     merge_adjacent_results_for_prompt,
     truncate_source_content,
@@ -203,6 +207,64 @@ def test_merge_adjacent_results_for_prompt_does_not_merge_different_files() -> N
     )
 
     assert [result.chunk.relative_path for result in merged_results] == ["first.py", "second.py"]
+
+
+
+def test_build_source_outline_includes_python_classes_functions_and_decorators() -> None:
+    content = "\n".join(
+        [
+            "class ApiController:",
+            "    pass",
+            "",
+            '@app.get("/health")',
+            "def health():",
+            '    return HealthResponse(status="ok")',
+            "",
+            "async def load_status():",
+            '    return "ok"',
+        ]
+    )
+
+    outline = build_source_outline(
+        content=content,
+        start_line=10,
+        language="python",
+    )
+
+    assert "- line 10: class ApiController:" in outline
+    assert '- line 13: @app.get("/health")' in outline
+    assert "- line 14: def health():" in outline
+    assert "- line 17: async def load_status():" in outline
+
+
+def test_format_search_result_context_includes_structural_outline_when_content_is_truncated() -> None:
+    content = "\n".join(
+        [
+            "module header",
+            *["filler"] * 20,
+            '@app.get("/health")',
+            "def health():",
+            '    return HealthResponse(status="ok")',
+            *["filler"] * 80,
+        ]
+    )
+
+    context = format_search_result_context(
+        _result(
+            relative_path="src/code_context/api.py",
+            start_line=1,
+            end_line=104,
+            content=content,
+            language="python",
+        ),
+        source_number=1,
+        max_source_chars=120,
+    )
+
+    assert "Structural outline:" in context
+    assert '- line 22: @app.get("/health")' in context
+    assert "- line 23: def health():" in context
+    assert "... [truncated middle]" in context
 
 
 def test_format_search_result_context_includes_source_metadata_and_content() -> None:

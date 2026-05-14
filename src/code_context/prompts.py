@@ -13,6 +13,7 @@ INPUTS:
 - result count limits
 - source content character limits
 - source content head/tail truncation for long merged source blocks
+- structural source outlines for long source blocks
 - adjacent same-file retrieval chunks for generated answer context
 
 OUTPUTS:
@@ -20,6 +21,7 @@ OUTPUTS:
 - system prompt text
 - user prompt text with source references
 - user prompt source blocks with adjacent same-file chunks merged for continuity
+- user prompt source blocks with structural outlines when content is truncated
 
 UPSTREAM:
 - grounded answer generation service
@@ -41,6 +43,7 @@ OWNS:
 - source context formatting
 - source content truncation
 - source content head/tail truncation strategy
+- structural outline extraction for long source blocks
 - prompt input validation
 
 DOES_NOT_OWN:
@@ -69,6 +72,7 @@ NOTES:
 - The prompt should discourage speculative wording such as likely, probably, or inferred endpoint behavior.
 - Adjacent chunks from the same file should be merged for generated-answer prompt context when possible.
 - Long source blocks should preserve both beginning and ending context when truncated.
+- Long Python source blocks should include a compact structural outline before truncated content.
 """
 
 from collections.abc import Sequence
@@ -184,23 +188,65 @@ def format_search_result_context(result: SearchResult, *, source_number: int, ma
     chunk = result.chunk
     truncated_content = truncate_source_content(chunk.content, max_chars=max_source_chars)
 
-    return "\n".join(
-        [
-            f"Source {source_number}:",
-            f"File: {chunk.relative_path}",
-            f"Lines: {chunk.start_line}-{chunk.end_line}",
-            f"Language: {chunk.language}",
-            f"Retrieval score: {result.score:.4f}",
-            "Content:",
-            truncated_content,
-        ]
-    )
+    lines = [
+        f"Source {source_number}:",
+        f"File: {chunk.relative_path}",
+        f"Lines: {chunk.start_line}-{chunk.end_line}",
+        f"Language: {chunk.language}",
+        f"Retrieval score: {result.score:.4f}",
+    ]
+
+    if len(chunk.content) > max_source_chars:
+        outline = build_source_outline(
+            content=chunk.content,
+            start_line=chunk.start_line,
+            language=chunk.language,
+        )
+        if outline:
+            lines.extend(["Structural outline:", outline])
+
+    lines.extend(["Content:", truncated_content])
+
+    return "\n".join(lines)
 
 
 def merge_adjacent_results_for_prompt(results: Sequence[SearchResult]) -> list[SearchResult]:
     """Merge adjacent same-file retrieval results into continuous prompt context blocks."""
 
     return [prompt_source.result for prompt_source in _merge_adjacent_results_for_prompt(results)]
+
+
+def build_source_outline(
+    *,
+    content: str,
+    start_line: int,
+    language: str,
+    max_items: int = 60,
+) -> str:
+    """Build a compact structural outline for long source blocks."""
+
+    if max_items < 1:
+        msg = "Maximum outline item count must be at least 1."
+        raise ValueError(msg)
+
+    if language.lower() != "python":
+        return ""
+
+    outline_lines: list[str] = []
+
+    for offset, line in enumerate(content.splitlines()):
+        stripped = line.strip()
+        if not _is_python_structural_line(stripped):
+            continue
+
+        source_line_number = start_line + offset
+        outline_lines.append(f"- line {source_line_number}: {stripped}")
+
+        if len(outline_lines) >= max_items:
+            outline_lines.append("- ... [outline truncated]")
+            break
+
+    return "\n".join(outline_lines)
 
 
 def truncate_source_content(content: str, *, max_chars: int) -> str:
@@ -223,6 +269,10 @@ def truncate_source_content(content: str, *, max_chars: int) -> str:
     tail = content[-tail_chars:].lstrip() if tail_chars > 0 else ""
 
     return f"{head}{marker}{tail}"
+
+
+def _is_python_structural_line(line: str) -> bool:
+    return line.startswith(("@", "class ", "def ", "async def "))
 
 
 def _merge_adjacent_results_for_prompt(results: Sequence[SearchResult]) -> list[_PromptSource]:

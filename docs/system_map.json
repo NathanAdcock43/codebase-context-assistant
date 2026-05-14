@@ -3511,7 +3511,8 @@
         "sample SourceChunk records",
         "model names",
         "prompt construction limits",
-        "adjacent same-file source chunks"
+        "adjacent same-file source chunks",
+        "long source blocks with structural code markers"
       ],
       "OUTPUTS": [
         "LlmRequest construction assertions",
@@ -3519,7 +3520,8 @@
         "prompt validation assertions",
         "source truncation assertions",
         "source head/tail truncation assertions",
-        "adjacent same-file source merge assertions"
+        "adjacent same-file source merge assertions",
+        "structural outline assertions"
       ],
       "UPSTREAM": [
         "prompt builder module",
@@ -3540,6 +3542,7 @@
         "grounded answer prompt tests",
         "generated answer source-use rule tests",
         "adjacent same-file source merge tests",
+        "structural outline tests",
         "source context formatting tests",
         "prompt validation tests",
         "source truncation tests",
@@ -3588,6 +3591,8 @@
       "test_build_grounded_answer_user_prompt_limits_result_count",
       "test_build_grounded_answer_user_prompt_merges_adjacent_same_file_chunks",
       "test_merge_adjacent_results_for_prompt_does_not_merge_different_files",
+      "test_build_source_outline_includes_python_classes_functions_and_decorators",
+      "test_format_search_result_context_includes_structural_outline_when_content_is_truncated",
       "test_format_search_result_context_includes_source_metadata_and_content",
       "test_truncate_source_content_adds_marker_when_content_is_too_long",
       "test_truncate_source_content_preserves_head_and_tail_context",
@@ -4657,13 +4662,15 @@
         "result count limits",
         "source content character limits",
         "source content head/tail truncation for long merged source blocks",
+        "structural source outlines for long source blocks",
         "adjacent same-file retrieval chunks for generated answer context"
       ],
       "OUTPUTS": [
         "provider-neutral LlmRequest records",
         "system prompt text",
         "user prompt text with source references",
-        "user prompt source blocks with adjacent same-file chunks merged for continuity"
+        "user prompt source blocks with adjacent same-file chunks merged for continuity",
+        "user prompt source blocks with structural outlines when content is truncated"
       ],
       "UPSTREAM": [
         "grounded answer generation service",
@@ -4685,6 +4692,7 @@
         "source context formatting",
         "source content truncation",
         "source content head/tail truncation strategy",
+        "structural outline extraction for long source blocks",
         "prompt input validation"
       ],
       "DOES_NOT_OWN": [
@@ -4714,7 +4722,8 @@
         "The prompt tells the configured LLM to answer only from supplied sources and to refuse if the sources are insufficient.",
         "The prompt should discourage speculative wording such as likely, probably, or inferred endpoint behavior.",
         "Adjacent chunks from the same file should be merged for generated-answer prompt context when possible.",
-        "Long source blocks should preserve both beginning and ending context when truncated."
+        "Long source blocks should preserve both beginning and ending context when truncated.",
+        "Long Python source blocks should include a compact structural outline before truncated content."
       ]
     },
     "imports": [
@@ -4736,7 +4745,9 @@
       "build_grounded_answer_user_prompt",
       "format_search_result_context",
       "merge_adjacent_results_for_prompt",
+      "build_source_outline",
       "truncate_source_content",
+      "_is_python_structural_line",
       "_merge_adjacent_results_for_prompt",
       "_can_merge_results",
       "_merge_search_results",
