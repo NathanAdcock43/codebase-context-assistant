@@ -9,12 +9,14 @@ INPUTS:
 - IndexSnapshot records
 - sample SourceChunk records
 - query text
+- deterministic enriched retrieval query text
 - path-like query fragments
 - retrieval thresholds
 - temporary index directories
 
 OUTPUTS:
 - retrieval response behavior assertions
+- enriched retrieval query assertions
 - requested source path sufficiency assertions
 
 UPSTREAM:
@@ -34,6 +36,7 @@ DOWNSTREAM:
 
 OWNS:
 - retrieval sufficiency tests
+- retrieval query enrichment tests
 - requested source path sufficiency tests
 - insufficient context tests
 - empty query tests
@@ -204,6 +207,38 @@ def test_retrieve_grounded_context_marks_named_missing_source_path_as_insufficie
         "src/code_context/ask.py",
         "src/code_context/llm_factory.py",
     ]
+
+
+def test_retrieve_grounded_context_uses_enriched_query_text_for_search(monkeypatch) -> None:
+    captured_queries: list[str] = []
+
+    def fake_search_chunks(chunks, query, *, limit, min_score):
+        captured_queries.append(query)
+        return []
+
+    monkeypatch.setattr("code_context.retrieval.search_chunks", fake_search_chunks)
+
+    query = """
+    AMP-14751
+    Postgres - Liquibase - BFN_FSCL_YR_END_OPT add new column for CREATE_CLASS_1_4
+    Add new column for CREATE_CLASS_1_4 VARCHAR(1) NOT NULL DEFAULT 'N';
+    """
+
+    response = retrieve_grounded_context(
+        snapshot=_snapshot(chunks=[_chunk(content="unrelated")]),
+        query=query,
+        limit=3,
+        min_score=0.0,
+        minimum_results=1,
+        minimum_top_score=0.0,
+    )
+
+    assert response.query == query.strip()
+    assert response.is_sufficient is False
+    assert captured_queries
+    assert captured_queries[0] != response.query
+    assert captured_queries[0].count("BFN_FSCL_YR_END_OPT") > response.query.count("BFN_FSCL_YR_END_OPT")
+    assert captured_queries[0].count("CREATE_CLASS_1_4") > response.query.count("CREATE_CLASS_1_4")
 
 def test_load_and_retrieve_context_loads_saved_snapshot(tmp_path: Path) -> None:
     index_dir = tmp_path / ".code_context_index"

@@ -631,7 +631,9 @@
       "INPUTS": [
         "IndexSnapshot records",
         "developer query text",
+        "deterministic enriched retrieval query text",
         "path-like query fragments when a question names a specific source file",
+        "deterministic query anchors for fuzzy ticket-style questions",
         "search limit",
         "search score threshold",
         "minimum result count",
@@ -656,6 +658,7 @@
       ],
       "OWNS": [
         "retrieval orchestration over indexed chunks",
+        "deterministic retrieval query enrichment before vector search",
         "retrieval sufficiency checks",
         "requested source path presence checks",
         "insufficient-context refusal reasons",
@@ -687,6 +690,7 @@
         "This service does not generate answers.",
         "It decides whether enough grounded context exists for a future answer step.",
         "Keep refusal reasons plain and developer-facing.",
+        "Preserve the original user query in responses even when enriched search text is used internally.",
         "If a query names a source path, retrieved context must include that path to be considered sufficient."
       ]
     },
@@ -694,13 +698,14 @@
       "__future__",
       "code_context.index_store",
       "code_context.models",
+      "code_context.query_analysis",
       "code_context.vector_store",
-      "pathlib",
-      "re"
+      "pathlib"
     ],
     "internal_imports": [
       "code_context.index_store",
       "code_context.models",
+      "code_context.query_analysis",
       "code_context.vector_store"
     ],
     "classes": [],
@@ -708,7 +713,6 @@
       "load_and_retrieve_context",
       "retrieve_grounded_context",
       "_determine_insufficient_reason",
-      "_extract_query_paths",
       "_missing_requested_paths",
       "_normalize_path",
       "_validate_retrieval_settings"
@@ -3677,12 +3681,14 @@
         "IndexSnapshot records",
         "sample SourceChunk records",
         "query text",
+        "deterministic enriched retrieval query text",
         "path-like query fragments",
         "retrieval thresholds",
         "temporary index directories"
       ],
       "OUTPUTS": [
         "retrieval response behavior assertions",
+        "enriched retrieval query assertions",
         "requested source path sufficiency assertions"
       ],
       "UPSTREAM": [
@@ -3702,6 +3708,7 @@
       ],
       "OWNS": [
         "retrieval sufficiency tests",
+        "retrieval query enrichment tests",
         "requested source path sufficiency tests",
         "insufficient context tests",
         "empty query tests",
@@ -3753,6 +3760,7 @@
       "test_retrieve_grounded_context_marks_no_matching_results_as_insufficient",
       "test_retrieve_grounded_context_marks_low_score_result_as_insufficient",
       "test_retrieve_grounded_context_marks_named_missing_source_path_as_insufficient",
+      "test_retrieve_grounded_context_uses_enriched_query_text_for_search",
       "test_load_and_retrieve_context_loads_saved_snapshot",
       "test_retrieve_grounded_context_rejects_invalid_settings",
       "_snapshot",

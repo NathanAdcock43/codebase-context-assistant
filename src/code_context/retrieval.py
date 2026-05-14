@@ -8,7 +8,9 @@ FLOW: grounded_context_retrieval
 INPUTS:
 - IndexSnapshot records
 - developer query text
+- deterministic enriched retrieval query text
 - path-like query fragments when a question names a specific source file
+- deterministic query anchors for fuzzy ticket-style questions
 - search limit
 - search score threshold
 - minimum result count
@@ -33,6 +35,7 @@ DOWNSTREAM:
 
 OWNS:
 - retrieval orchestration over indexed chunks
+- deterministic retrieval query enrichment before vector search
 - retrieval sufficiency checks
 - requested source path presence checks
 - insufficient-context refusal reasons
@@ -62,18 +65,16 @@ NOTES:
 - This service does not generate answers.
 - It decides whether enough grounded context exists for a future answer step.
 - Keep refusal reasons plain and developer-facing.
+- Preserve the original user query in responses even when enriched search text is used internally.
 - If a query names a source path, retrieved context must include that path to be considered sufficient.
 """
 
-import re
 from pathlib import Path
 
 from code_context.index_store import DEFAULT_INDEX_FILENAME, JsonIndexStore
 from code_context.models import IndexSnapshot, RetrievalResponse
+from code_context.query_analysis import build_retrieval_query, extract_query_paths
 from code_context.vector_store import search_chunks
-
-
-PATH_LIKE_PATTERN = re.compile(r"(?:[A-Za-z0-9_.-]+[\\/])+[A-Za-z0-9_.-]+\.[A-Za-z0-9_]+")
 
 DEFAULT_RETRIEVAL_MIN_SCORE = 0.001
 DEFAULT_MINIMUM_TOP_SCORE = 0.05
@@ -137,14 +138,15 @@ def retrieve_grounded_context(
             results=[],
         )
 
+    retrieval_query = build_retrieval_query(normalized_query)
     results = search_chunks(
         snapshot.chunks,
-        normalized_query,
+        retrieval_query,
         limit=limit,
         min_score=min_score,
     )
 
-    requested_paths = _extract_query_paths(normalized_query)
+    requested_paths = extract_query_paths(normalized_query)
     insufficient_reason = _determine_insufficient_reason(
         results=results,
         minimum_results=minimum_results,
@@ -180,10 +182,6 @@ def _determine_insufficient_reason(
         return f"The query asked about {formatted_paths}, but retrieved context did not include that file."
 
     return None
-
-
-def _extract_query_paths(query: str) -> frozenset[str]:
-    return frozenset(_normalize_path(match) for match in PATH_LIKE_PATTERN.findall(query))
 
 
 def _missing_requested_paths(requested_paths: frozenset[str], results: list) -> frozenset[str]:
