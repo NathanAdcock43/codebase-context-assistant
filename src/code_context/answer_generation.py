@@ -28,10 +28,10 @@ UPSTREAM:
 - local tests
 
 DOWNSTREAM:
-- future ask workflow LLM integration
-- future FastAPI ask responses
-- future CLI ask responses
-- future OpenAI provider adapter
+- ask workflow LLM integration
+- FastAPI generated ask responses
+- CLI generated ask responses
+- OpenAI provider adapter
 - future citation verification
 
 OWNS:
@@ -65,6 +65,7 @@ STATE:
 NOTES:
 - This module does not create a real provider client.
 - This module should only be called after stale-index and sufficiency checks pass.
+- Temperature is optional because some provider models reject sampling parameters.
 - Temperature is optional because some provider models reject sampling parameters.
 - Tests use fake clients so no provider key or network call is required.
 """

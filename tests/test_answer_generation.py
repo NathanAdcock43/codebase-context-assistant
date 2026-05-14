@@ -12,10 +12,12 @@ INPUTS:
 - fake LLM clients
 - generated LLM response records
 - result limit settings
+- adjacent same-file retrieval chunks
 
 OUTPUTS:
 - generated answer assertions
 - LLM request capture assertions
+- merged prompt context assertions
 - grounded source reference assertions
 - validation error assertions
 
@@ -29,13 +31,14 @@ UPSTREAM:
 DOWNSTREAM:
 - local test runs
 - future CI guardrails
-- future OpenAI provider tests
+- OpenAI provider adapter tests
 - future responder node LLM integration tests
-- future API and CLI ask integration tests
+- API and CLI ask integration tests
 - system map review
 
 OWNS:
 - answer generation service tests
+- generated prompt context merge tests
 - injected client invocation tests
 - generated answer shape tests
 - grounded source reference tests
@@ -188,6 +191,68 @@ def test_generate_grounded_answer_builds_grounded_prompt_request() -> None:
     assert "Where is the API created?" in request.messages[1].content
     assert "src/code_context/api.py" in request.messages[1].content
     assert "Lines: 15-30" in request.messages[1].content
+
+
+
+def test_generate_grounded_answer_sends_merged_adjacent_context_to_client() -> None:
+    client = FakeLlmClient(
+        LlmResponse(
+            content="Answer from merged grounded context.",
+            model="test-model",
+            provider="test-provider",
+        )
+    )
+
+    answer = generate_grounded_answer(
+        question="Where are API endpoints defined?",
+        results=[
+            _result(
+                relative_path="src/code_context/api.py",
+                start_line=1,
+                end_line=3,
+                content="line 1\nline 2\nline 3",
+            ),
+            _result(
+                relative_path="src/code_context/api.py",
+                start_line=3,
+                end_line=5,
+                content="line 3\nline 4\nline 5",
+            ),
+            _result(
+                relative_path="docs/project_brief.md",
+                start_line=1,
+                end_line=2,
+                content="brief 1\nbrief 2",
+                language="markdown",
+            ),
+        ],
+        client=client,
+        model="test-model",
+        max_source_chars_per_result=80,
+    )
+
+    prompt = client.requests[0].messages[1].content
+
+    assert "Source 1:" in prompt
+    assert "File: src/code_context/api.py" in prompt
+    assert "Lines: 1-5" in prompt
+    assert prompt.count("line 3") == 1
+    assert "line 4" in prompt
+    assert "line 5" in prompt
+    assert "Source 2:" in prompt
+    assert "File: docs/project_brief.md" in prompt
+    assert "Source 3:" not in prompt
+
+    assert [source.relative_path for source in answer.sources] == [
+        "src/code_context/api.py",
+        "src/code_context/api.py",
+        "docs/project_brief.md",
+    ]
+    assert [(source.start_line, source.end_line) for source in answer.sources] == [
+        (1, 3),
+        (3, 5),
+        (1, 2),
+    ]
 
 
 def test_generate_grounded_answer_limits_sources_sent_to_client_and_result() -> None:

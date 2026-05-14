@@ -1974,11 +1974,13 @@
         "sample SourceChunk records",
         "fake LLM clients",
         "generated LLM response records",
-        "result limit settings"
+        "result limit settings",
+        "adjacent same-file retrieval chunks"
       ],
       "OUTPUTS": [
         "generated answer assertions",
         "LLM request capture assertions",
+        "merged prompt context assertions",
         "grounded source reference assertions",
         "validation error assertions"
       ],
@@ -1992,13 +1994,14 @@
       "DOWNSTREAM": [
         "local test runs",
         "future CI guardrails",
-        "future OpenAI provider tests",
+        "OpenAI provider adapter tests",
         "future responder node LLM integration tests",
-        "future API and CLI ask integration tests",
+        "API and CLI ask integration tests",
         "system map review"
       ],
       "OWNS": [
         "answer generation service tests",
+        "generated prompt context merge tests",
         "injected client invocation tests",
         "generated answer shape tests",
         "grounded source reference tests",
@@ -2050,6 +2053,7 @@
       "test_generate_grounded_answer_calls_injected_client_and_returns_answer",
       "test_generate_grounded_answer_omits_temperature_by_default",
       "test_generate_grounded_answer_builds_grounded_prompt_request",
+      "test_generate_grounded_answer_sends_merged_adjacent_context_to_client",
       "test_generate_grounded_answer_limits_sources_sent_to_client_and_result",
       "test_build_grounded_source_references_maps_search_results",
       "test_generate_grounded_answer_rejects_empty_results",
@@ -4009,10 +4013,10 @@
         "local tests"
       ],
       "DOWNSTREAM": [
-        "future ask workflow LLM integration",
-        "future FastAPI ask responses",
-        "future CLI ask responses",
-        "future OpenAI provider adapter",
+        "ask workflow LLM integration",
+        "FastAPI generated ask responses",
+        "CLI generated ask responses",
+        "OpenAI provider adapter",
         "future citation verification"
       ],
       "OWNS": [
@@ -4048,6 +4052,7 @@
       "NOTES": [
         "This module does not create a real provider client.",
         "This module should only be called after stale-index and sufficiency checks pass.",
+        "Temperature is optional because some provider models reject sampling parameters.",
         "Temperature is optional because some provider models reject sampling parameters.",
         "Tests use fake clients so no provider key or network call is required."
       ]
