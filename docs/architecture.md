@@ -6,7 +6,7 @@ The project is built around this reliability question:
 
     How can AI help a developer understand a codebase without drifting away from the actual code?
 
-The current architecture proves the non-LLM foundation first:
+The current architecture proves the grounding foundation first:
 
 1. scan local source files
 2. collect metadata and content hashes
@@ -17,6 +17,7 @@ The current architecture proves the non-LLM foundation first:
 7. refuse when context is insufficient
 8. detect when indexed context is stale
 9. refuse to answer from stale indexed context
+10. optionally generate an answer after stale-index and grounding checks pass
 
 The project currently exposes this workflow through both FastAPI and a local CLI.
 
@@ -33,14 +34,17 @@ The current version includes:
 - deterministic planner, retriever, verifier, responder workflow
 - optional LangGraph workflow adapter
 - reusable ask orchestration service
+- configurable LLM client boundary
+- OpenAI Responses API adapter
+- grounded answer generation service
+- generated-answer guardrails and self-refusal downgrade behavior
+- per-request LLM model overrides through API and CLI ask paths
 - FastAPI endpoints
 - CLI commands for index, ask, and drift
 - system map generation script
 - local setup and demo documentation
 
-The current version does not call an LLM yet.
-
-That is intentional. The project protects grounding, stale-index refusal, and deterministic test coverage before adding generated answer text.
+Generated answers are optional and remain behind the grounding boundary. The project protects stale-index refusal, retrieval sufficiency, and deterministic test coverage before generated answer text is allowed.
 
 ## High-level workflow
 
@@ -65,6 +69,7 @@ The normal ask flow is:
         -> verifier
         -> responder
         -> grounded answer or refusal
+        -> optional generated answer after verification
 
 The retrieval flow is:
 
@@ -304,6 +309,63 @@ Does not own:
 
 This is the application-service layer for asking questions.
 
+### `src/code_context/answer_generation.py`
+
+Generates grounded answer records through an injected LLM client boundary.
+
+Owns:
+
+- prompt request construction through the prompt builder
+- injected LLM client invocation
+- generated answer result shaping
+- grounded source reference extraction
+
+Does not own:
+
+- provider-specific SDK calls
+- retrieval scoring
+- stale-index refusal
+- API routing
+- CLI argument parsing
+
+### `src/code_context/llm.py`
+
+Defines the provider-neutral LLM client boundary.
+
+Owns:
+
+- `LlmMessage`
+- `LlmRequest`
+- `LlmResponse`
+- `LlmClient`
+- optional temperature validation
+
+Does not own:
+
+- provider SDK calls
+- prompt construction
+- retrieval
+- grounding verification
+
+### `src/code_context/openai_client.py`
+
+Adapts the OpenAI Responses API to the provider-neutral LLM boundary.
+
+Owns:
+
+- OpenAI client construction
+- request conversion
+- response text extraction
+- usage metadata extraction
+- provider-specific optional parameter filtering
+
+Does not own:
+
+- prompt construction
+- ask orchestration
+- API routing
+- CLI argument parsing
+
 ### `src/code_context/api.py`
 
 Exposes the workflow through FastAPI.
@@ -408,6 +470,7 @@ The CLI is useful for demos and local usage:
 
     py -3.13 -m code_context.cli index --repo $RepoPath --index-dir $IndexDir
     py -3.13 -m code_context.cli ask --index-dir $IndexDir --question "Where is the ask workflow implemented?" --no-langgraph
+    py -3.13 -m code_context.cli ask --index-dir $IndexDir --question "Where is the CLI generated answer opt-in implemented?" --no-langgraph --use-llm --llm-model gpt-5.5
     py -3.13 -m code_context.cli drift --index-dir $IndexDir
 
 The API is useful for local HTTP workflows and FastAPI docs:
@@ -437,7 +500,7 @@ The system map is not yet a full C4 export. It is a local project visibility too
 
 The current architecture has clear limits:
 
-- no LLM call yet
+- generated answers require optional provider configuration
 - deterministic answer text is basic
 - local vector-style retrieval is not ChromaDB yet
 - line-based chunking is not AST-aware
@@ -455,12 +518,12 @@ Near-term additions should preserve the current reliability behavior.
 
 Likely next steps:
 
-1. add configurable LLM answer generation after verification
+1. improve generated-answer citation verification
 2. preserve stale-index refusal before any LLM call
 3. preserve citations and source references in generated answers
 4. add ChromaDB-backed vector storage
-5. add `.env`-backed runtime configuration
-6. improve demo polish after LLM integration
+5. add a small sample repository or fixture
+6. improve demo polish around model overrides and API usage
 
 Later additions:
 

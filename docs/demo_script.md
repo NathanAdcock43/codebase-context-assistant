@@ -12,7 +12,7 @@ The project is still intentionally small and local. Deterministic answers remain
 6. refuse when context is stale or insufficient
 7. show a planner, retriever, verifier, responder workflow
 8. optionally generate an answer through a configured OpenAI client
-8. optionally generate an answer through a configured OpenAI client
+9. optionally override the LLM model per request through CLI or API parameters
 
 ## Demo setup
 
@@ -208,7 +208,7 @@ In FastAPI docs, use `POST /ask` with a request like this after the repository h
   "question": "Where is the CLI generated answer opt-in implemented?",
   "limit": 8,
   "use_llm": true,
-  "llm_temperature": 0
+  "llm_model": "gpt-5.5"
 }
 ```
 
@@ -221,43 +221,7 @@ Expected response shape:
   "is_stale": false,
   "is_llm_generated": true,
   "llm_provider": "openai",
-  "sources": [
-    {
-      "relative_path": "src/code_context/cli.py"
-    }
-  ]
-}
-```
-
-What to say:
-
-    The API generated-answer path is still guarded. The service checks for stale indexed context first, then retrieves and verifies grounded context, and only then calls the configured LLM.
-
-### Optional API generated-answer smoke
-
-Generated answers require OpenAI environment settings to be available to the API process before starting Uvicorn. Do not commit secrets.
-
-In FastAPI docs, use `POST /ask` with a request like this after the repository has been indexed:
-
-```json
-{
-  "index_dir": ".code_context_index",
-  "question": "Where is the CLI generated answer opt-in implemented?",
-  "limit": 8,
-  "use_llm": true,
-  "llm_temperature": 0
-}
-```
-
-Expected response shape:
-
-```json
-{
-  "confidence": "grounded_generated",
-  "is_grounded": true,
-  "is_stale": false,
-  "is_llm_generated": true,
-  "llm_provider": "openai",
+  "llm_model": "gpt-5.5",
   "sources": [
     {
       "relative_path": "src/code_context/cli.py"

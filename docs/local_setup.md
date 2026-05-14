@@ -92,6 +92,8 @@ macOS or Linux:
 
 Then set `OPENAI_API_KEY` in `.env`.
 
+You may also set `OPENAI_MODEL` in `.env` as the configured default model. CLI and API ask requests can still override that model for one request with `--llm-model` or `llm_model`.
+
 On macOS or Linux, load `.env` into the current shell before running CLI or API generated-answer commands:
 
     set -a
@@ -182,11 +184,21 @@ Ask with an optional generated answer after loading OpenAI environment settings.
 
 Windows:
 
-    py -3.13 -m code_context.cli ask --index-dir $IndexDir --question "Where is the CLI generated answer opt-in implemented?" --limit 8 --no-langgraph --use-llm --llm-temperature 0
+    py -3.13 -m code_context.cli ask --index-dir $IndexDir --question "Where is the CLI generated answer opt-in implemented?" --limit 8 --no-langgraph --use-llm
 
 macOS or Linux:
 
-    python -m code_context.cli ask --index-dir "$IndexDir" --question "Where is the CLI generated answer opt-in implemented?" --limit 8 --no-langgraph --use-llm --llm-temperature 0
+    python -m code_context.cli ask --index-dir "$IndexDir" --question "Where is the CLI generated answer opt-in implemented?" --limit 8 --no-langgraph --use-llm
+
+Ask with a per-request model override.
+
+Windows:
+
+    py -3.13 -m code_context.cli ask --index-dir $IndexDir --question "Where is the CLI generated answer opt-in implemented?" --limit 8 --no-langgraph --use-llm --llm-model gpt-5.5
+
+macOS or Linux:
+
+    python -m code_context.cli ask --index-dir "$IndexDir" --question "Where is the CLI generated answer opt-in implemented?" --limit 8 --no-langgraph --use-llm --llm-model gpt-5.5
 
 Check drift.
 
@@ -241,8 +253,17 @@ Example `/ask` request body:
       "index_dir": ".code_context_index",
       "question": "Where is the CLI generated answer opt-in implemented?",
       "limit": 8,
+      "use_llm": true
+    }
+
+Example `/ask` request body with a per-request model override:
+
+    {
+      "index_dir": ".code_context_index",
+      "question": "Where is the CLI generated answer opt-in implemented?",
+      "limit": 8,
       "use_llm": true,
-      "llm_temperature": 0
+      "llm_model": "gpt-5.5"
     }
 
 Expected response indicators:
@@ -334,6 +355,7 @@ If generated answers fail, confirm:
 - the OpenAI optional dependency is installed
 - `OPENAI_API_KEY` is set in the current shell or API process
 - `LLM_PROVIDER=openai`
+- the requested model is available to your OpenAI account
 - the deterministic version of the same ask request works first
 
 If FastAPI docs do not load, confirm `uvicorn` is installed and that the API command is running from the repository root.

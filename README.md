@@ -157,7 +157,11 @@ Ask a grounded question:
 
 Ask with an optional generated answer after loading OpenAI environment settings:
 
-    python -m code_context.cli ask --index-dir "$IndexDir" --question "Where is the CLI generated answer opt-in implemented?" --limit 8 --no-langgraph --use-llm --llm-temperature 0
+    python -m code_context.cli ask --index-dir "$IndexDir" --question "Where is the CLI generated answer opt-in implemented?" --limit 8 --no-langgraph --use-llm
+
+Ask with a per-request model override:
+
+    python -m code_context.cli ask --index-dir "$IndexDir" --question "Where is the CLI generated answer opt-in implemented?" --limit 8 --no-langgraph --use-llm --llm-model gpt-5.5
 
 Check whether the index is stale:
 
@@ -192,11 +196,20 @@ Optional generated-answer `/ask` request body:
       "index_dir": ".code_context_index",
       "question": "Where is the CLI generated answer opt-in implemented?",
       "limit": 8,
-      "use_llm": true,
-      "llm_temperature": 0
+      "use_llm": true
     }
 
-Generated answers still use the same stale-index and grounding checks before the provider is called.
+Optional generated-answer `/ask` request body with a per-request model override:
+
+    {
+      "index_dir": ".code_context_index",
+      "question": "Where is the CLI generated answer opt-in implemented?",
+      "limit": 8,
+      "use_llm": true,
+      "llm_model": "gpt-5.5"
+    }
+
+Generated answers still use the same stale-index and grounding checks before the provider is called. If `llm_model` is omitted, the configured `OPENAI_MODEL` value or the project default is used.
 
 ## Demo
 

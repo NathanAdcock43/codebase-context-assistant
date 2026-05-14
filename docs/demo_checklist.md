@@ -85,11 +85,21 @@ Windows users should set equivalent environment variables in the active PowerShe
 
 Windows:
 
-    py -3.13 -m code_context.cli ask --index-dir $IndexDir --question "Where is the CLI generated answer opt-in implemented?" --limit 8 --no-langgraph --use-llm --llm-temperature 0
+    py -3.13 -m code_context.cli ask --index-dir $IndexDir --question "Where is the CLI generated answer opt-in implemented?" --limit 8 --no-langgraph --use-llm
 
 macOS or Linux:
 
-    python -m code_context.cli ask --index-dir "$IndexDir" --question "Where is the CLI generated answer opt-in implemented?" --limit 8 --no-langgraph --use-llm --llm-temperature 0
+    python -m code_context.cli ask --index-dir "$IndexDir" --question "Where is the CLI generated answer opt-in implemented?" --limit 8 --no-langgraph --use-llm
+
+Optional per-request model override:
+
+Windows:
+
+    py -3.13 -m code_context.cli ask --index-dir $IndexDir --question "Where is the CLI generated answer opt-in implemented?" --limit 8 --no-langgraph --use-llm --llm-model gpt-5.5
+
+macOS or Linux:
+
+    python -m code_context.cli ask --index-dir "$IndexDir" --question "Where is the CLI generated answer opt-in implemented?" --limit 8 --no-langgraph --use-llm --llm-model gpt-5.5
 
 Expected indicators:
 
@@ -98,6 +108,7 @@ Expected indicators:
     Stale: no
     LLM generated: yes
     LLM provider: openai
+    LLM model is shown
     Sources include src/code_context/cli.py
 
 ## Deterministic API ask
@@ -145,7 +156,7 @@ Generated API requests require OpenAI environment settings to be loaded before s
         "question": "Where is the CLI generated answer opt-in implemented?",
         "limit": 8,
         "use_llm": true,
-        "llm_temperature": 0
+        "llm_model": "gpt-5.5"
       }'
 
     python -m json.tool /tmp/code_context_api_ask_llm.json
@@ -160,7 +171,7 @@ Expected indicators:
     "llm_provider": "openai"
     sources include src/code_context/cli.py
 
-A known-good local smoke run returned in about 4.2 seconds with model `gpt-4.1-mini-2025-04-14`.
+A known-good local smoke run without a per-request model override returned in about 4.2 seconds with model `gpt-4.1-mini-2025-04-14`.
 
 ## Stale-index refusal
 

@@ -12,7 +12,7 @@ The tool scans a local repository, collects file metadata, calculates file hashe
 
 It also checks whether the index has gone stale. If files have changed since indexing, the ask workflow refuses to answer until the repository is re-indexed.
 
-Generated answers are optional. The default behavior is deterministic. When generated answers are enabled, the system still checks for stale indexed context, retrieves grounded source chunks, verifies whether the context is sufficient, and only then calls the configured LLM provider.
+Generated answers are optional. The default behavior is deterministic. When generated answers are enabled, the system still checks for stale indexed context, retrieves grounded source chunks, verifies whether the context is sufficient, and only then calls the configured LLM provider. CLI and API callers can also pass a per-request model override for generated answers.
 
 ## What it demonstrates
 
@@ -30,6 +30,7 @@ This project demonstrates a practical AI workflow for codebase understanding:
 - CLI commands for local indexing, asking, and drift checks
 - optional LangGraph routing around planner, retriever, verifier, and responder steps
 - optional OpenAI-generated answers after grounding checks pass
+- per-request LLM model overrides through CLI and API ask paths
 - generated-answer self-refusal downgrades when the supplied context is insufficient
 
 ## Why it is intentionally small
@@ -80,6 +81,7 @@ A local demo can show:
 10. asking again successfully
 11. optionally calling OpenAI for a generated answer after grounding checks pass
 12. using FastAPI `/ask` with `use_llm: true`
+13. optionally passing `llm_model` or `--llm-model` for model-specific smoke tests
 
 ## Good demo questions
 
