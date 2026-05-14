@@ -3518,6 +3518,7 @@
         "grounded source formatting assertions",
         "prompt validation assertions",
         "source truncation assertions",
+        "source head/tail truncation assertions",
         "adjacent same-file source merge assertions"
       ],
       "UPSTREAM": [
@@ -3541,7 +3542,8 @@
         "adjacent same-file source merge tests",
         "source context formatting tests",
         "prompt validation tests",
-        "source truncation tests"
+        "source truncation tests",
+        "source head/tail truncation tests"
       ],
       "DOES_NOT_OWN": [
         "LLM provider client tests",
@@ -3588,6 +3590,7 @@
       "test_merge_adjacent_results_for_prompt_does_not_merge_different_files",
       "test_format_search_result_context_includes_source_metadata_and_content",
       "test_truncate_source_content_adds_marker_when_content_is_too_long",
+      "test_truncate_source_content_preserves_head_and_tail_context",
       "test_truncate_source_content_keeps_short_content_unchanged",
       "test_build_grounded_answer_user_prompt_rejects_blank_question",
       "test_build_grounded_answer_user_prompt_rejects_empty_results",
@@ -4653,6 +4656,7 @@
         "prompt temperature setting",
         "result count limits",
         "source content character limits",
+        "source content head/tail truncation for long merged source blocks",
         "adjacent same-file retrieval chunks for generated answer context"
       ],
       "OUTPUTS": [
@@ -4680,6 +4684,7 @@
         "adjacent same-file source chunk merging for prompt context",
         "source context formatting",
         "source content truncation",
+        "source content head/tail truncation strategy",
         "prompt input validation"
       ],
       "DOES_NOT_OWN": [
@@ -4708,7 +4713,8 @@
         "This prompt builder should only be used after stale-index and sufficiency checks have passed.",
         "The prompt tells the configured LLM to answer only from supplied sources and to refuse if the sources are insufficient.",
         "The prompt should discourage speculative wording such as likely, probably, or inferred endpoint behavior.",
-        "Adjacent chunks from the same file should be merged for generated-answer prompt context when possible."
+        "Adjacent chunks from the same file should be merged for generated-answer prompt context when possible.",
+        "Long source blocks should preserve both beginning and ending context when truncated."
       ]
     },
     "imports": [

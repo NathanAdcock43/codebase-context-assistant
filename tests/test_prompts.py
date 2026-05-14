@@ -18,6 +18,7 @@ OUTPUTS:
 - grounded source formatting assertions
 - prompt validation assertions
 - source truncation assertions
+- source head/tail truncation assertions
 - adjacent same-file source merge assertions
 
 UPSTREAM:
@@ -42,6 +43,7 @@ OWNS:
 - source context formatting tests
 - prompt validation tests
 - source truncation tests
+- source head/tail truncation tests
 
 DOES_NOT_OWN:
 - LLM provider client tests
@@ -230,7 +232,19 @@ def test_truncate_source_content_adds_marker_when_content_is_too_long() -> None:
     truncated = truncate_source_content(content, max_chars=60)
 
     assert len(truncated) <= 60
-    assert truncated.endswith("... [truncated]")
+    assert "... [truncated middle]" in truncated
+
+
+
+def test_truncate_source_content_preserves_head_and_tail_context() -> None:
+    content = "HEADER_CONTEXT:" + (" middle " * 40) + "ROUTE_DECORATOR_CONTEXT"
+
+    truncated = truncate_source_content(content, max_chars=90)
+
+    assert len(truncated) <= 90
+    assert truncated.startswith("HEADER_CONTEXT")
+    assert "ROUTE_DECORATOR_CONTEXT" in truncated
+    assert "... [truncated middle]" in truncated
 
 
 def test_truncate_source_content_keeps_short_content_unchanged() -> None:

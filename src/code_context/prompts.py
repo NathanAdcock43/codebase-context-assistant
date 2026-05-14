@@ -12,6 +12,7 @@ INPUTS:
 - prompt temperature setting
 - result count limits
 - source content character limits
+- source content head/tail truncation for long merged source blocks
 - adjacent same-file retrieval chunks for generated answer context
 
 OUTPUTS:
@@ -39,6 +40,7 @@ OWNS:
 - adjacent same-file source chunk merging for prompt context
 - source context formatting
 - source content truncation
+- source content head/tail truncation strategy
 - prompt input validation
 
 DOES_NOT_OWN:
@@ -66,6 +68,7 @@ NOTES:
 - The prompt tells the configured LLM to answer only from supplied sources and to refuse if the sources are insufficient.
 - The prompt should discourage speculative wording such as likely, probably, or inferred endpoint behavior.
 - Adjacent chunks from the same file should be merged for generated-answer prompt context when possible.
+- Long source blocks should preserve both beginning and ending context when truncated.
 """
 
 from collections.abc import Sequence
@@ -201,18 +204,25 @@ def merge_adjacent_results_for_prompt(results: Sequence[SearchResult]) -> list[S
 
 
 def truncate_source_content(content: str, *, max_chars: int) -> str:
-    """Truncate source content for prompt safety while preserving a clear marker."""
+    """Truncate source content while preserving head and tail context."""
 
     _validate_source_limit(max_chars)
 
     if len(content) <= max_chars:
         return content
 
-    marker = "\n... [truncated]"
+    marker = "\n... [truncated middle]\n"
     if max_chars <= len(marker):
         return marker[-max_chars:]
 
-    return f"{content[: max_chars - len(marker)].rstrip()}{marker}"
+    available_content_chars = max_chars - len(marker)
+    head_chars = available_content_chars // 2
+    tail_chars = available_content_chars - head_chars
+
+    head = content[:head_chars].rstrip()
+    tail = content[-tail_chars:].lstrip() if tail_chars > 0 else ""
+
+    return f"{head}{marker}{tail}"
 
 
 def _merge_adjacent_results_for_prompt(results: Sequence[SearchResult]) -> list[_PromptSource]:
