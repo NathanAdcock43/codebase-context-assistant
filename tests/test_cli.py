@@ -21,6 +21,7 @@ OUTPUTS:
 - persisted index assertions
 - generated-answer CLI routing assertions
 - terminal drift report assertions
+- ticket-style CLI ask grounding assertions
 
 UPSTREAM:
 - CLI implementation
@@ -39,6 +40,7 @@ DOWNSTREAM:
 OWNS:
 - CLI index command tests
 - CLI ask command tests
+- ticket-style CLI ask tests
 - CLI generated-answer option tests
 - CLI drift command tests
 - terminal output formatting tests
@@ -241,6 +243,72 @@ def test_cli_ask_prints_grounded_answer_for_existing_index(
     assert "Workflow steps:" in captured.out
     assert captured.err == ""
 
+
+
+def test_cli_ask_uses_ticket_anchor_retrieval_and_prunes_weak_sources(
+    capsys,
+    tmp_path: Path,
+) -> None:
+    repo = tmp_path / "repo"
+    export_file = repo / "src" / "exports" / "options.py"
+    menu_file = repo / "src" / "navigation" / "menu.py"
+    export_file.parent.mkdir(parents=True)
+    menu_file.parent.mkdir(parents=True)
+
+    export_file.write_bytes(
+        b"class ExportRunOptions:\n"
+        b"    CUSTOMER_EXPORT_STATUS = 'N'\n"
+        b"    def apply_export_status(self):\n"
+        b"        return CUSTOMER_EXPORT_STATUS\n"
+    )
+    menu_file.write_bytes(
+        b"class NavigationMenu:\n"
+        b"    def render_user_menu(self):\n"
+        b"        return 'menu'\n"
+    )
+
+    index_dir = tmp_path / ".code_context_index"
+    index_repository(
+        repo,
+        index_dir=index_dir,
+        max_lines=20,
+        overlap_lines=0,
+    )
+
+    exit_code = cli.main(
+        [
+            "ask",
+            "--index-dir",
+            str(index_dir),
+            "--question",
+            (
+                "TASK-123\n"
+                "Data change request\n"
+                "Add CUSTOMER_EXPORT_STATUS to EXPORT_RUN_OPTIONS.\n"
+                "Users need an option to control export status during run setup."
+            ),
+            "--limit",
+            "2",
+            "--min-score",
+            "0",
+            "--minimum-results",
+            "1",
+            "--minimum-top-score",
+            "0",
+            "--no-langgraph",
+        ]
+    )
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "Confidence: grounded" in captured.out
+    assert "Grounded: yes" in captured.out
+    assert "Stale: no" in captured.out
+    assert "LLM generated: no" in captured.out
+    assert "src/exports/options.py" in captured.out
+    assert "src/navigation/menu.py" not in captured.out
+    assert captured.err == ""
 
 def test_cli_ask_routes_generated_answer_options_to_ask_service(
     monkeypatch: Any,
