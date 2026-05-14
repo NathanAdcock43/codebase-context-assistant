@@ -617,7 +617,7 @@
       "FLOW": "local_vector_search",
       "INPUTS": [
         "SourceChunk records",
-        "developer query text",
+        "developer query text and path-like query fragments",
         "embedding dimension",
         "result limit",
         "minimum score threshold",
@@ -626,7 +626,7 @@
       ],
       "OUTPUTS": [
         "SearchResult records ordered by descending relevance score",
-        "boosted ranking for path, file name, symbol, implementation-source, and source-content token matches"
+        "boosted ranking for exact path, path suffix, file name, symbol, implementation-source, and source-content token matches"
       ],
       "UPSTREAM": [
         "source chunker",
@@ -648,7 +648,7 @@
         "cosine similarity scoring",
         "chunk retrieval ranking",
         "result limiting and score filtering",
-        "path and symbol match boosting for local retrieval quality",
+        "exact path, path suffix, and symbol match boosting for local retrieval quality",
         "implementation-source preference when the query asks where behavior is implemented"
       ],
       "DOES_NOT_OWN": [
@@ -675,7 +675,7 @@
       "NOTES": [
         "This is a dependency-free retrieval baseline for the MVP.",
         "It gives us testable retrieval behavior before adding ChromaDB.",
-        "Path and symbol boosting helps implementation-location questions without hiding source references.",
+        "Exact path, path suffix, and symbol boosting help implementation-location questions without hiding source references.",
         "Implementation questions should prefer source files over tests unless the query is explicitly about tests.",
         "Later ChromaDB storage should preserve the same public search behavior."
       ]
@@ -702,6 +702,10 @@
       "cosine_similarity",
       "tokenize",
       "_score_entry",
+      "_extract_query_paths",
+      "_path_match_boost",
+      "_generated_metadata_path_penalty",
+      "_normalize_path",
       "_implementation_source_boost",
       "_looks_like_implementation_query",
       "_is_source_path",
@@ -3640,7 +3644,7 @@
         "developer query text",
         "search limit settings",
         "score threshold settings",
-        "file path examples for implementation-location questions",
+        "exact file path examples for implementation-location questions",
         "implementation source versus test path examples"
       ],
       "OUTPUTS": [
@@ -3662,7 +3666,7 @@
       "OWNS": [
         "local vector search tests",
         "ranking behavior tests",
-        "path and symbol boost tests",
+        "exact path, path suffix, and symbol boost tests",
         "implementation-source preference tests",
         "tokenization tests",
         "embedding stability tests",
@@ -3692,7 +3696,7 @@
       "NOTES": [
         "These tests give us a retrieval baseline before adding ChromaDB.",
         "The retrieval behavior should remain deterministic across runs.",
-        "Path and symbol boosting protects implementation-location questions without adding provider dependencies.",
+        "Exact path, path suffix, and symbol boosting protect implementation-location questions without adding provider dependencies.",
         "Implementation-location questions should prefer source files over tests unless the query asks about tests."
       ]
     },
@@ -3724,6 +3728,7 @@
       "test_cosine_similarity_rejects_mismatched_vector_lengths",
       "test_vector_dimension_must_be_at_least_eight",
       "test_search_limit_must_be_at_least_one",
+      "test_local_vector_store_prioritizes_exact_source_path_over_metadata_file",
       "_chunk"
     ],
     "warnings": []

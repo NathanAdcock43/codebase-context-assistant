@@ -10,7 +10,7 @@ INPUTS:
 - developer query text
 - search limit settings
 - score threshold settings
-- file path examples for implementation-location questions
+- exact file path examples for implementation-location questions
 - implementation source versus test path examples
 
 OUTPUTS:
@@ -32,7 +32,7 @@ DOWNSTREAM:
 OWNS:
 - local vector search tests
 - ranking behavior tests
-- path and symbol boost tests
+- exact path, path suffix, and symbol boost tests
 - implementation-source preference tests
 - tokenization tests
 - embedding stability tests
@@ -60,7 +60,7 @@ STATE:
 NOTES:
 - These tests give us a retrieval baseline before adding ChromaDB.
 - The retrieval behavior should remain deterministic across runs.
-- Path and symbol boosting protects implementation-location questions without adding provider dependencies.
+- Exact path, path suffix, and symbol boosting protect implementation-location questions without adding provider dependencies.
 - Implementation-location questions should prefer source files over tests unless the query asks about tests.
 """
 
@@ -324,6 +324,38 @@ def test_search_limit_must_be_at_least_one() -> None:
     with pytest.raises(ValueError, match="limit must be at least 1"):
         store.search("hash", limit=0)
 
+
+
+def test_local_vector_store_prioritizes_exact_source_path_over_metadata_file() -> None:
+    chunks = [
+        _chunk(
+            chunk_id="src/codebase_context_assistant.egg-info/SOURCES.txt:1-5",
+            relative_path="src/codebase_context_assistant.egg-info/SOURCES.txt",
+            content="src/code_context/api.py\nsrc/code_context/ask.py\nsrc/code_context/cli.py",
+        ),
+        _chunk(
+            chunk_id="src/code_context/api.py:1-20",
+            relative_path="src/code_context/api.py",
+            content="def create_app():\n    app = FastAPI()\n    return app",
+        ),
+        _chunk(
+            chunk_id="src/code_context/ask.py:1-20",
+            relative_path="src/code_context/ask.py",
+            content="def ask_indexed_code_question():\n    return None",
+        ),
+    ]
+
+    results = search_chunks(
+        chunks,
+        "In src/code_context/api.py, where is create_app defined?",
+        limit=3,
+    )
+
+    assert [result.chunk.relative_path for result in results] == [
+        "src/code_context/api.py",
+        "src/code_context/ask.py",
+        "src/codebase_context_assistant.egg-info/SOURCES.txt",
+    ]
 
 def _chunk(*, chunk_id: str, relative_path: str, content: str) -> SourceChunk:
     return SourceChunk(

@@ -7,7 +7,7 @@ FLOW: local_vector_search
 
 INPUTS:
 - SourceChunk records
-- developer query text
+- developer query text and path-like query fragments
 - embedding dimension
 - result limit
 - minimum score threshold
@@ -16,7 +16,7 @@ INPUTS:
 
 OUTPUTS:
 - SearchResult records ordered by descending relevance score
-- boosted ranking for path, file name, symbol, implementation-source, and source-content token matches
+- boosted ranking for exact path, path suffix, file name, symbol, implementation-source, and source-content token matches
 
 UPSTREAM:
 - source chunker
@@ -38,7 +38,7 @@ OWNS:
 - cosine similarity scoring
 - chunk retrieval ranking
 - result limiting and score filtering
-- path and symbol match boosting for local retrieval quality
+- exact path, path suffix, and symbol match boosting for local retrieval quality
 - implementation-source preference when the query asks where behavior is implemented
 
 DOES_NOT_OWN:
@@ -63,7 +63,7 @@ STATE:
 NOTES:
 - This is a dependency-free retrieval baseline for the MVP.
 - It gives us testable retrieval behavior before adding ChromaDB.
-- Path and symbol boosting helps implementation-location questions without hiding source references.
+- Exact path, path suffix, and symbol boosting help implementation-location questions without hiding source references.
 - Implementation questions should prefer source files over tests unless the query is explicitly about tests.
 - Later ChromaDB storage should preserve the same public search behavior.
 """
@@ -79,7 +79,11 @@ from code_context.models import SearchResult, SourceChunk
 
 DEFAULT_EMBEDDING_DIMENSION = 256
 TOKEN_PATTERN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*|\d+")
+PATH_LIKE_PATTERN = re.compile(r"(?:[A-Za-z0-9_.-]+[\\/])+[A-Za-z0-9_.-]+\.[A-Za-z0-9_]+")
 
+EXACT_PATH_MATCH_BOOST = 4.0
+PATH_SUFFIX_MATCH_BOOST = 2.4
+GENERATED_METADATA_PATH_PENALTY = 2.0
 PATH_MATCH_BOOST_PER_TOKEN = 0.6
 PATH_MATCH_BOOST_CAP = 1.2
 CONTENT_MATCH_BOOST_PER_TOKEN = 0.02
@@ -159,6 +163,7 @@ class LocalVectorStore:
             raise ValueError("limit must be at least 1")
 
         query_tokens = frozenset(tokenize(query))
+        query_paths = _extract_query_paths(query)
         query_vector = embed_text(query, dimension=self.dimension)
         if not any(query_vector):
             return []
@@ -169,6 +174,7 @@ class LocalVectorStore:
             score = _score_entry(
                 query_vector=query_vector,
                 query_tokens=query_tokens,
+                query_paths=query_paths,
                 entry=entry,
             )
             if score >= min_score:
@@ -247,6 +253,7 @@ def _score_entry(
     *,
     query_vector: list[float],
     query_tokens: frozenset[str],
+    query_paths: frozenset[str],
     entry: _ChunkEntry,
 ) -> float:
     vector_score = cosine_similarity(query_vector, entry.vector)
@@ -262,9 +269,57 @@ def _score_entry(
         per_token=CONTENT_MATCH_BOOST_PER_TOKEN,
         cap=CONTENT_MATCH_BOOST_CAP,
     )
+    exact_path_boost = _path_match_boost(query_paths, entry.chunk.relative_path)
     implementation_boost = _implementation_source_boost(query_tokens, entry.chunk)
+    metadata_penalty = _generated_metadata_path_penalty(query_paths, entry.chunk.relative_path)
 
-    return vector_score + path_boost + content_boost + implementation_boost
+    return vector_score + path_boost + content_boost + exact_path_boost + implementation_boost + metadata_penalty
+
+
+def _extract_query_paths(query: str) -> frozenset[str]:
+    return frozenset(_normalize_path(match) for match in PATH_LIKE_PATTERN.findall(query))
+
+
+def _path_match_boost(query_paths: frozenset[str], relative_path: str) -> float:
+    if not query_paths:
+        return 0.0
+
+    normalized_path = _normalize_path(relative_path)
+    file_name = normalized_path.rsplit("/", maxsplit=1)[-1]
+
+    for query_path in query_paths:
+        query_file_name = query_path.rsplit("/", maxsplit=1)[-1]
+
+        if (
+            query_path == normalized_path
+            or query_path.endswith(f"/{normalized_path}")
+            or normalized_path.endswith(f"/{query_path}")
+        ):
+            return EXACT_PATH_MATCH_BOOST
+
+        if query_path.endswith(normalized_path) or normalized_path.endswith(query_path):
+            return PATH_SUFFIX_MATCH_BOOST
+
+        if query_file_name and query_file_name == file_name:
+            return PATH_SUFFIX_MATCH_BOOST
+
+    return 0.0
+
+
+def _generated_metadata_path_penalty(query_paths: frozenset[str], relative_path: str) -> float:
+    if not query_paths:
+        return 0.0
+
+    normalized_path = _normalize_path(relative_path)
+
+    if ".egg-info/" in normalized_path or normalized_path.endswith("sources.txt"):
+        return -GENERATED_METADATA_PATH_PENALTY
+
+    return 0.0
+
+
+def _normalize_path(path: str) -> str:
+    return path.strip().strip("'\"`.,:;()[]{}").replace("\\", "/").lstrip("./").lower()
 
 
 def _implementation_source_boost(query_tokens: frozenset[str], chunk: SourceChunk) -> float:
