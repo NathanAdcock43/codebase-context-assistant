@@ -170,7 +170,7 @@
         "future API ask response models"
       ],
       "OWNS": [
-        "deterministic workflow ordering",
+        "deterministic workflow order",
         "planner to retriever to verifier to responder orchestration",
         "workflow-level input validation through CodeQuestionState construction",
         "final CodeQuestionState return value"
