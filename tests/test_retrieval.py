@@ -74,8 +74,12 @@ from pathlib import Path
 import pytest
 
 from code_context.index_store import JsonIndexStore, build_index_snapshot
-from code_context.models import IndexSnapshot, SourceChunk
-from code_context.retrieval import load_and_retrieve_context, retrieve_grounded_context
+from code_context.models import FileEnrichment, FileMetadata, IndexSnapshot, SourceChunk
+from code_context.retrieval import (
+    build_searchable_chunks_with_enrichment,
+    load_and_retrieve_context,
+    retrieve_grounded_context,
+)
 
 
 def test_retrieve_grounded_context_marks_strong_match_as_sufficient() -> None:
@@ -380,6 +384,116 @@ def test_retrieve_grounded_context_uses_related_terms_for_fuzzy_http_api_questio
     assert response.is_sufficient is True
     assert response.results[0].chunk.relative_path == "src/code_context/api.py"
 
+
+
+def test_retrieve_grounded_context_uses_fresh_enrichment_metadata_for_fuzzy_query() -> None:
+    source_chunk = _chunk(
+        chunk_id="src/code_context/api.py:1-3",
+        relative_path="src/code_context/api.py",
+        content=(
+            "def create_app():\n"
+            "    app = object()\n"
+            "    return app\n"
+        ),
+    )
+    snapshot = build_index_snapshot(
+        repo_path="C:/example/repo",
+        files=[
+            FileMetadata(
+                path=Path("C:/example/repo/src/code_context/api.py"),
+                relative_path="src/code_context/api.py",
+                extension=".py",
+                size_bytes=100,
+                modified_at=123.45,
+                content_hash="fresh-api-hash",
+                language="python",
+            )
+        ],
+        chunks=[source_chunk],
+        indexed_at=123.45,
+    ).model_copy(
+        update={
+            "enrichments": [
+                FileEnrichment(
+                    relative_path="src/code_context/api.py",
+                    source_hash="fresh-api-hash",
+                    enriched_at=456.78,
+                    provider="fake",
+                    model="fake-model",
+                    summary="Defines the local HTTP API boundary.",
+                    conceptual_terms=["HTTP API", "external interface"],
+                    related_user_phrases=[
+                        "what lets another program talk to this tool",
+                    ],
+                    owned_behaviors=["creates API application"],
+                    important_symbols=["create_app"],
+                )
+            ]
+        }
+    )
+
+    response = retrieve_grounded_context(
+        snapshot=snapshot,
+        query="What part lets another program talk to this tool?",
+        limit=1,
+        min_score=0.0,
+        minimum_results=1,
+        minimum_top_score=0.0,
+    )
+
+    assert response.is_sufficient is True
+    assert response.results[0].chunk.relative_path == "src/code_context/api.py"
+    assert response.results[0].chunk.content == source_chunk.content
+    assert "Index enrichment metadata" not in response.results[0].chunk.content
+
+
+def test_build_searchable_chunks_with_enrichment_ignores_stale_enrichment_metadata() -> None:
+    source_chunk = _chunk(
+        chunk_id="src/code_context/api.py:1-3",
+        relative_path="src/code_context/api.py",
+        content=(
+            "def create_app():\\n"
+            "    app = object()\\n"
+            "    return app\\n"
+        ),
+    )
+    snapshot = build_index_snapshot(
+        repo_path="C:/example/repo",
+        files=[
+            FileMetadata(
+                path=Path("C:/example/repo/src/code_context/api.py"),
+                relative_path="src/code_context/api.py",
+                extension=".py",
+                size_bytes=100,
+                modified_at=123.45,
+                content_hash="fresh-api-hash",
+                language="python",
+            )
+        ],
+        chunks=[source_chunk],
+        indexed_at=123.45,
+    ).model_copy(
+        update={
+            "enrichments": [
+                FileEnrichment(
+                    relative_path="src/code_context/api.py",
+                    source_hash="old-api-hash",
+                    enriched_at=456.78,
+                    provider="fake",
+                    model="fake-model",
+                    summary="Defines the galactic bridge interface.",
+                    conceptual_terms=["galactic bridge"],
+                    related_user_phrases=["where is the galactic bridge"],
+                )
+            ]
+        }
+    )
+
+    searchable_chunks, original_chunks_by_id = build_searchable_chunks_with_enrichment(snapshot)
+
+    assert searchable_chunks == [source_chunk]
+    assert original_chunks_by_id == {}
+    assert "galactic bridge" not in searchable_chunks[0].content
 
 def test_load_and_retrieve_context_loads_saved_snapshot(tmp_path: Path) -> None:
     index_dir = tmp_path / ".code_context_index"

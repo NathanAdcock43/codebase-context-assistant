@@ -11,6 +11,7 @@ INPUTS:
 - deterministic enriched retrieval query text
 - path-like query fragments when a question names a specific source file
 - deterministic query anchors for fuzzy ticket-style questions
+- optional fresh file enrichment metadata as retrieval-only search text
 - search limit
 - search score threshold
 - minimum result count
@@ -18,6 +19,7 @@ INPUTS:
 
 OUTPUTS:
 - RetrievalResponse records with sufficiency decisions and grounded SearchResult records
+- retrieval results scored with fresh enrichment metadata while returning original source chunks
 - pruned retrieval results that drop weak trailing matches
 - insufficient-context refusals when a named source path is missing from retrieved results
 
@@ -37,6 +39,7 @@ DOWNSTREAM:
 OWNS:
 - retrieval orchestration over indexed chunks
 - deterministic retrieval query enrichment before vector search
+- fresh enrichment metadata inclusion as retrieval-only search text
 - retrieval sufficiency checks
 - weak trailing result pruning
 - requested source path presence checks
@@ -76,7 +79,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from code_context.index_store import DEFAULT_INDEX_FILENAME, JsonIndexStore
-from code_context.models import IndexSnapshot, RetrievalResponse, SearchResult
+from code_context.models import FileEnrichment, IndexSnapshot, RetrievalResponse, SearchResult, SourceChunk
 from code_context.query_analysis import build_retrieval_query, extract_query_paths
 from code_context.vector_store import search_chunks
 
@@ -154,12 +157,14 @@ def retrieve_grounded_context(
     retrieval_query = build_retrieval_query(
         build_query_with_related_terms(normalized_query, normalized_related_terms)
     )
+    searchable_chunks, original_chunks_by_id = build_searchable_chunks_with_enrichment(snapshot)
     results = search_chunks(
-        snapshot.chunks,
+        searchable_chunks,
         retrieval_query,
         limit=limit,
         min_score=min_score,
     )
+    results = restore_original_chunks(results, original_chunks_by_id)
     results = _prune_weak_trailing_results(results)
 
     requested_paths = extract_query_paths(normalized_query)
@@ -179,6 +184,97 @@ def retrieve_grounded_context(
         insufficient_reason=insufficient_reason,
         results=results,
     )
+
+
+def build_searchable_chunks_with_enrichment(
+    snapshot: IndexSnapshot,
+) -> tuple[list[SourceChunk], dict[str, SourceChunk]]:
+    """Return chunks with fresh enrichment text appended for search scoring only."""
+    enrichment_text_by_path = _fresh_enrichment_text_by_path(snapshot)
+    if not enrichment_text_by_path:
+        return list(snapshot.chunks), {}
+
+    searchable_chunks: list[SourceChunk] = []
+    original_chunks_by_id: dict[str, SourceChunk] = {}
+
+    for chunk in snapshot.chunks:
+        normalized_path = _normalize_path(chunk.relative_path)
+        enrichment_text = enrichment_text_by_path.get(normalized_path)
+
+        if not enrichment_text:
+            searchable_chunks.append(chunk)
+            continue
+
+        original_chunks_by_id[chunk.chunk_id] = chunk
+        searchable_chunks.append(
+            chunk.model_copy(
+                update={
+                    "content": "\n\n".join(
+                        [
+                            chunk.content,
+                            "Index enrichment metadata:",
+                            enrichment_text,
+                        ]
+                    )
+                }
+            )
+        )
+
+    return searchable_chunks, original_chunks_by_id
+
+
+def restore_original_chunks(
+    results: Sequence[SearchResult],
+    original_chunks_by_id: dict[str, SourceChunk],
+) -> list[SearchResult]:
+    """Replace enrichment-scored chunks with their original source chunk content."""
+    if not original_chunks_by_id:
+        return list(results)
+
+    restored_results: list[SearchResult] = []
+    for result in results:
+        original_chunk = original_chunks_by_id.get(result.chunk.chunk_id)
+        if original_chunk is None:
+            restored_results.append(result)
+            continue
+
+        restored_results.append(
+            result.model_copy(update={"chunk": original_chunk})
+        )
+
+    return restored_results
+
+
+def _fresh_enrichment_text_by_path(snapshot: IndexSnapshot) -> dict[str, str]:
+    file_hash_by_path = {
+        _normalize_path(file.relative_path): file.content_hash
+        for file in snapshot.files
+    }
+
+    enrichment_text_by_path: dict[str, str] = {}
+    for enrichment in snapshot.enrichments:
+        normalized_path = _normalize_path(enrichment.relative_path)
+        if file_hash_by_path.get(normalized_path) != enrichment.source_hash:
+            continue
+
+        enrichment_text = _format_enrichment_search_text(enrichment)
+        if enrichment_text:
+            enrichment_text_by_path[normalized_path] = enrichment_text
+
+    return enrichment_text_by_path
+
+
+def _format_enrichment_search_text(enrichment: FileEnrichment) -> str:
+    text_parts = [
+        enrichment.summary or "",
+        " ".join(enrichment.conceptual_terms),
+        " ".join(enrichment.related_user_phrases),
+        " ".join(enrichment.owned_behaviors),
+        " ".join(enrichment.important_symbols),
+    ]
+
+    return "\n".join(part for part in text_parts if part.strip())
+
 
 
 def normalize_related_terms(related_terms: Sequence[str] | None = None) -> list[str]:

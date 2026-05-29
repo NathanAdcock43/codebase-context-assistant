@@ -714,6 +714,7 @@
         "deterministic enriched retrieval query text",
         "path-like query fragments when a question names a specific source file",
         "deterministic query anchors for fuzzy ticket-style questions",
+        "optional fresh file enrichment metadata as retrieval-only search text",
         "search limit",
         "search score threshold",
         "minimum result count",
@@ -721,6 +722,7 @@
       ],
       "OUTPUTS": [
         "RetrievalResponse records with sufficiency decisions and grounded SearchResult records",
+        "retrieval results scored with fresh enrichment metadata while returning original source chunks",
         "pruned retrieval results that drop weak trailing matches",
         "insufficient-context refusals when a named source path is missing from retrieved results"
       ],
@@ -740,6 +742,7 @@
       "OWNS": [
         "retrieval orchestration over indexed chunks",
         "deterministic retrieval query enrichment before vector search",
+        "fresh enrichment metadata inclusion as retrieval-only search text",
         "retrieval sufficiency checks",
         "weak trailing result pruning",
         "requested source path presence checks",
@@ -796,6 +799,10 @@
     "functions": [
       "load_and_retrieve_context",
       "retrieve_grounded_context",
+      "build_searchable_chunks_with_enrichment",
+      "restore_original_chunks",
+      "_fresh_enrichment_text_by_path",
+      "_format_enrichment_search_text",
       "normalize_related_terms",
       "build_query_with_related_terms",
       "find_matched_related_terms",
@@ -4069,6 +4076,8 @@
       "test_retrieve_grounded_context_prunes_weak_trailing_results",
       "test_retrieve_grounded_context_uses_enriched_ticket_anchors_for_real_search",
       "test_retrieve_grounded_context_uses_related_terms_for_fuzzy_http_api_question",
+      "test_retrieve_grounded_context_uses_fresh_enrichment_metadata_for_fuzzy_query",
+      "test_build_searchable_chunks_with_enrichment_ignores_stale_enrichment_metadata",
       "test_load_and_retrieve_context_loads_saved_snapshot",
       "test_retrieve_grounded_context_rejects_invalid_settings",
       "_snapshot",
