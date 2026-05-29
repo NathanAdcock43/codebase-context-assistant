@@ -67,7 +67,7 @@ from code_context.index_store import (
     load_index_snapshot,
     save_index_snapshot,
 )
-from code_context.models import FileMetadata, SourceChunk
+from code_context.models import FileEnrichment, FileMetadata, SourceChunk
 
 
 def test_build_index_snapshot_collects_files_and_chunks(tmp_path: Path) -> None:
@@ -86,6 +86,18 @@ def test_build_index_snapshot_collects_files_and_chunks(tmp_path: Path) -> None:
     assert snapshot.indexed_at == 123.45
     assert snapshot.files == [file_metadata]
     assert snapshot.chunks == [source_chunk]
+
+
+
+def test_build_index_snapshot_defaults_to_empty_enrichments(tmp_path: Path) -> None:
+    snapshot = build_index_snapshot(
+        repo_path=tmp_path,
+        files=[_sample_file_metadata(tmp_path)],
+        chunks=[_sample_source_chunk()],
+        indexed_at=123.45,
+    )
+
+    assert snapshot.enrichments == []
 
 
 def test_json_index_store_saves_and_loads_snapshot(tmp_path: Path) -> None:
@@ -112,6 +124,36 @@ def test_json_index_store_saves_and_loads_snapshot(tmp_path: Path) -> None:
     assert loaded.chunks[0].relative_path == "src/example.py"
     assert loaded.chunks[0].start_line == 1
     assert loaded.chunks[0].end_line == 2
+
+
+
+def test_json_index_store_saves_and_loads_enrichment_metadata(tmp_path: Path) -> None:
+    index_dir = tmp_path / ".code_context_index"
+    file_metadata = _sample_file_metadata(tmp_path)
+    source_chunk = _sample_source_chunk()
+    enrichment = _sample_file_enrichment()
+
+    snapshot = build_index_snapshot(
+        repo_path=tmp_path,
+        files=[file_metadata],
+        chunks=[source_chunk],
+        indexed_at=123.45,
+    ).model_copy(update={"enrichments": [enrichment]})
+
+    store = JsonIndexStore(index_dir)
+
+    store.save(snapshot)
+    loaded = store.load()
+
+    assert loaded.enrichments == [enrichment]
+    assert loaded.enrichments[0].relative_path == "src/example.py"
+    assert loaded.enrichments[0].source_hash == "abc123"
+    assert loaded.enrichments[0].conceptual_terms == ["HTTP API", "metadata persistence"]
+    assert loaded.enrichments[0].related_user_phrases == [
+        "where is the index stored",
+        "how are records saved",
+    ]
+    assert loaded.enrichments[0].important_symbols == ["JsonIndexStore"]
 
 
 def test_json_index_store_exists_returns_false_then_true(tmp_path: Path) -> None:
@@ -165,6 +207,29 @@ def test_save_and_load_index_snapshot_helpers_round_trip(tmp_path: Path) -> None
     loaded = load_index_snapshot(index_dir)
 
     assert loaded == snapshot
+
+
+
+def _sample_file_enrichment() -> FileEnrichment:
+    return FileEnrichment(
+        relative_path="src/example.py",
+        source_hash="abc123",
+        enriched_at=456.78,
+        provider="fake",
+        model="fake-model",
+        summary="Stores and loads local index metadata.",
+        conceptual_terms=["HTTP API", "metadata persistence"],
+        related_user_phrases=[
+            "where is the index stored",
+            "how are records saved",
+        ],
+        owned_behaviors=[
+            "persists JSON snapshots",
+            "loads JSON snapshots",
+        ],
+        important_symbols=["JsonIndexStore"],
+    )
+
 
 
 def _sample_file_metadata(tmp_path: Path) -> FileMetadata:

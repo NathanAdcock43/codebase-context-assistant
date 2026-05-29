@@ -13,6 +13,7 @@ INPUTS:
 - source chunk boundaries
 - source chunk content
 - persisted index snapshot data
+- optional offline file enrichment metadata
 - drift comparison results
 - retrieval scores
 - retrieval sufficiency decisions
@@ -20,6 +21,7 @@ INPUTS:
 OUTPUTS:
 - FileMetadata
 - SourceChunk
+- FileEnrichment
 - IndexSnapshot
 - FileDrift
 - DriftReport
@@ -34,6 +36,7 @@ UPSTREAM:
 - vector store
 - retrieval service
 - future parser modules
+- future index enrichment workflows
 - future index loading workflows
 
 DOWNSTREAM:
@@ -50,6 +53,7 @@ OWNS:
 - shared DTO definitions
 - file metadata shape
 - source chunk shape
+- optional file enrichment metadata shape
 - persisted index snapshot shape
 - file drift result shape
 - drift report shape
@@ -106,12 +110,28 @@ class SourceChunk(BaseModel):
     language: str = Field(default="unknown")
 
 
+
+class FileEnrichment(BaseModel):
+    relative_path: str
+    source_hash: str
+    enriched_at: float
+    provider: str | None = Field(default=None)
+    model: str | None = Field(default=None)
+    schema_version: int = Field(default=1)
+    summary: str | None = Field(default=None)
+    conceptual_terms: list[str] = Field(default_factory=list)
+    related_user_phrases: list[str] = Field(default_factory=list)
+    owned_behaviors: list[str] = Field(default_factory=list)
+    important_symbols: list[str] = Field(default_factory=list)
+
+
 class IndexSnapshot(BaseModel):
     schema_version: int = Field(default=1)
     repo_root: str
     indexed_at: float
     files: list[FileMetadata] = Field(default_factory=list)
     chunks: list[SourceChunk] = Field(default_factory=list)
+    enrichments: list[FileEnrichment] = Field(default_factory=list)
 
 
 class FileDrift(BaseModel):

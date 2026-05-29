@@ -1472,6 +1472,7 @@
         "source chunk boundaries",
         "source chunk content",
         "persisted index snapshot data",
+        "optional offline file enrichment metadata",
         "drift comparison results",
         "retrieval scores",
         "retrieval sufficiency decisions"
@@ -1479,6 +1480,7 @@
       "OUTPUTS": [
         "FileMetadata",
         "SourceChunk",
+        "FileEnrichment",
         "IndexSnapshot",
         "FileDrift",
         "DriftReport",
@@ -1493,6 +1495,7 @@
         "vector store",
         "retrieval service",
         "future parser modules",
+        "future index enrichment workflows",
         "future index loading workflows"
       ],
       "DOWNSTREAM": [
@@ -1509,6 +1512,7 @@
         "shared DTO definitions",
         "file metadata shape",
         "source chunk shape",
+        "optional file enrichment metadata shape",
         "persisted index snapshot shape",
         "file drift result shape",
         "drift report shape",
@@ -1552,6 +1556,7 @@
     "classes": [
       "FileMetadata",
       "SourceChunk",
+      "FileEnrichment",
       "IndexSnapshot",
       "FileDrift",
       "DriftReport",
@@ -3104,11 +3109,14 @@
     "classes": [],
     "functions": [
       "test_build_index_snapshot_collects_files_and_chunks",
+      "test_build_index_snapshot_defaults_to_empty_enrichments",
       "test_json_index_store_saves_and_loads_snapshot",
+      "test_json_index_store_saves_and_loads_enrichment_metadata",
       "test_json_index_store_exists_returns_false_then_true",
       "test_json_index_store_load_missing_file_raises",
       "test_json_index_store_delete_removes_index_file",
       "test_save_and_load_index_snapshot_helpers_round_trip",
+      "_sample_file_enrichment",
       "_sample_file_metadata",
       "_sample_source_chunk"
     ],
