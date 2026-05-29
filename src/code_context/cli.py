@@ -407,6 +407,21 @@ def format_ask_result(result: AskWorkflowResult) -> str:
             ]
         )
 
+    if result.needs_clarification:
+        lines.append("")
+        lines.append("Clarification suggestion:")
+
+        if result.suggested_question:
+            lines.append(f"Suggested question: {result.suggested_question}")
+
+        if result.suggested_related_terms:
+            lines.append(
+                f"Suggested related terms: {', '.join(result.suggested_related_terms)}"
+            )
+
+        if result.clarification_reason:
+            lines.append(f"Reason: {result.clarification_reason}")
+
     if result.plan:
         lines.append("")
         lines.append("Plan:")

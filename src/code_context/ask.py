@@ -92,6 +92,7 @@ from pydantic import BaseModel, Field
 from code_context.agent.langgraph_graph import run_code_question_workflow_with_optional_langgraph
 from code_context.agent.state import AgentStep
 from code_context.answer_generation import generate_grounded_answer
+from code_context.clarification import suggest_clarification
 from code_context.config import load_app_config
 from code_context.drift import detect_drift
 from code_context.llm import LlmClient
@@ -151,6 +152,10 @@ class AskWorkflowResult(BaseModel):
     sources: list[SearchResult]
     steps: list[AgentStep]
     is_llm_generated: bool = False
+    needs_clarification: bool = False
+    suggested_question: str | None = None
+    suggested_related_terms: list[str] = Field(default_factory=list)
+    clarification_reason: str | None = None
     llm_provider: str | None = None
     llm_model: str | None = None
     llm_usage: dict[str, int] = Field(default_factory=dict)
@@ -217,6 +222,11 @@ def ask_indexed_code_question(
         steps=state.steps,
     )
 
+    if not is_grounded and not normalized_related_terms:
+        clarification_result = build_clarification_ask_result(result)
+        if clarification_result is not None:
+            return clarification_result
+
     if not use_llm or not is_grounded:
         return result
 
@@ -226,6 +236,31 @@ def ask_indexed_code_question(
         llm_model=llm_model,
         llm_temperature=llm_temperature,
     )
+
+
+def build_clarification_ask_result(result: AskWorkflowResult) -> AskWorkflowResult | None:
+    """Add a deterministic clarification suggestion when retrieval likely missed intent."""
+    suggestion = suggest_clarification(result.question)
+    if suggestion is None:
+        return None
+
+    related_terms_text = ", ".join(suggestion.suggested_related_terms)
+
+    return result.model_copy(
+        update={
+            "answer": (
+                "I found insufficient indexed context for that wording, but the question may be fuzzy. "
+                f"Try asking: \"{suggestion.suggested_question}\" "
+                f"with related terms: {related_terms_text}."
+            ),
+            "confidence": "needs_clarification",
+            "needs_clarification": True,
+            "suggested_question": suggestion.suggested_question,
+            "suggested_related_terms": suggestion.suggested_related_terms,
+            "clarification_reason": suggestion.reason,
+        }
+    )
+
 
 
 def build_generated_ask_result(

@@ -211,6 +211,10 @@ class AskResponse(BaseModel):
     sources: list[AskSourceResponse]
     steps: list[AskStepResponse]
     is_llm_generated: bool = False
+    needs_clarification: bool = False
+    suggested_question: str | None = None
+    suggested_related_terms: list[str] = Field(default_factory=list)
+    clarification_reason: str | None = None
     llm_provider: str | None = None
     llm_model: str | None = None
     llm_usage: dict[str, int] = Field(default_factory=dict)
@@ -368,6 +372,10 @@ def create_app() -> FastAPI:
                 for step in result.steps
             ],
             is_llm_generated=result.is_llm_generated,
+            needs_clarification=result.needs_clarification,
+            suggested_question=result.suggested_question,
+            suggested_related_terms=result.suggested_related_terms,
+            clarification_reason=result.clarification_reason,
             llm_provider=result.llm_provider,
             llm_model=result.llm_model,
             llm_usage=result.llm_usage,

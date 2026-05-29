@@ -519,6 +519,80 @@
     "warnings": []
   },
   {
+    "path": "src/code_context/clarification.py",
+    "role": "Suggest deterministic clarification hints for weak fuzzy retrieval.",
+    "layer": "retrieval",
+    "flow": "retrieval_clarification",
+    "header_fields": {
+      "ROLE": "Suggest deterministic clarification hints for weak fuzzy retrieval.",
+      "LAYER": "retrieval",
+      "FLOW": "retrieval_clarification",
+      "INPUTS": [
+        "developer question text",
+        "known fuzzy concept trigger phrases",
+        "deterministic related-term suggestion rules"
+      ],
+      "OUTPUTS": [
+        "ClarificationSuggestion records with suggested questions and related terms"
+      ],
+      "UPSTREAM": [
+        "ask workflow orchestration service",
+        "future retrieval alignment checks",
+        "future API ask responses",
+        "future CLI ask output"
+      ],
+      "DOWNSTREAM": [
+        "ask workflow result shaping",
+        "API response models",
+        "CLI terminal formatting",
+        "future clarification loop behavior"
+      ],
+      "OWNS": [
+        "deterministic fuzzy concept detection",
+        "suggested related-term sets",
+        "suggested clarified question text",
+        "clarification reason text"
+      ],
+      "DOES_NOT_OWN": [
+        "source retrieval",
+        "vector scoring",
+        "stale-index detection",
+        "LLM query rewriting",
+        "answer generation",
+        "API routing",
+        "CLI argument parsing"
+      ],
+      "SIDE_EFFECTS": [
+        "none"
+      ],
+      "STATE": {
+        "reads": [
+          "none"
+        ],
+        "writes": [
+          "none"
+        ]
+      },
+      "NOTES": [
+        "This module should not call an LLM.",
+        "Suggestions are search aids, not source evidence.",
+        "Keep the first concept library small and explainable."
+      ]
+    },
+    "imports": [
+      "__future__",
+      "pydantic"
+    ],
+    "internal_imports": [],
+    "classes": [
+      "ClarificationSuggestion"
+    ],
+    "functions": [
+      "suggest_clarification"
+    ],
+    "warnings": []
+  },
+  {
     "path": "src/code_context/query_analysis.py",
     "role": "Extract deterministic retrieval anchors from developer questions and pasted tickets.",
     "layer": "retrieval",
@@ -2170,6 +2244,7 @@
       "test_retrieve_endpoint_reports_insufficient_context",
       "test_retrieve_endpoint_returns_404_when_index_is_missing",
       "test_ask_endpoint_returns_grounded_answer_from_agent_workflow",
+      "test_ask_endpoint_returns_clarification_suggestion_for_fuzzy_question",
       "test_ask_endpoint_refuses_when_context_is_insufficient",
       "test_ask_endpoint_prunes_weak_trailing_sources",
       "test_ask_endpoint_refuses_when_named_source_path_is_missing",
@@ -2483,6 +2558,7 @@
       "test_generated_answer_reports_insufficient_context_for_indexed_context_phrases",
       "test_ask_indexed_code_question_uses_enriched_ticket_anchors_for_grounding",
       "test_ask_indexed_code_question_uses_related_terms_for_fuzzy_question",
+      "test_ask_indexed_code_question_suggests_related_terms_for_fuzzy_question",
       "test_ask_indexed_code_question_returns_insufficient_context",
       "test_ask_indexed_code_question_refuses_when_named_source_path_is_missing",
       "test_ask_indexed_code_question_does_not_call_llm_when_context_is_insufficient",
@@ -2572,6 +2648,74 @@
       "test_chunk_file_reads_file_and_preserves_relative_path",
       "test_chunk_ids_are_stable_for_same_content",
       "test_chunk_ids_include_normalized_relative_path"
+    ],
+    "warnings": []
+  },
+  {
+    "path": "tests/test_clarification.py",
+    "role": "Verify deterministic clarification suggestions for weak fuzzy retrieval.",
+    "layer": "tests",
+    "flow": "retrieval_clarification_validation",
+    "header_fields": {
+      "ROLE": "Verify deterministic clarification suggestions for weak fuzzy retrieval.",
+      "LAYER": "tests",
+      "FLOW": "retrieval_clarification_validation",
+      "INPUTS": [
+        "fuzzy developer questions",
+        "unrelated developer questions"
+      ],
+      "OUTPUTS": [
+        "clarification suggestion assertions",
+        "no-suggestion assertions for unrelated questions"
+      ],
+      "UPSTREAM": [
+        "clarification suggestion module"
+      ],
+      "DOWNSTREAM": [
+        "local test runs",
+        "future CI guardrails",
+        "ask workflow clarification behavior",
+        "API and CLI clarification responses"
+      ],
+      "OWNS": [
+        "deterministic clarification rule tests",
+        "related-term suggestion tests",
+        "fuzzy HTTP API question tests"
+      ],
+      "DOES_NOT_OWN": [
+        "retrieval scoring tests",
+        "ask workflow orchestration tests",
+        "API route tests",
+        "CLI output tests",
+        "LLM query rewriting tests"
+      ],
+      "SIDE_EFFECTS": [
+        "none"
+      ],
+      "STATE": {
+        "reads": [
+          "none"
+        ],
+        "writes": [
+          "none"
+        ]
+      },
+      "NOTES": [
+        "These tests should remain deterministic.",
+        "Suggestions are search aids, not source evidence."
+      ]
+    },
+    "imports": [
+      "__future__",
+      "code_context.clarification"
+    ],
+    "internal_imports": [
+      "code_context.clarification"
+    ],
+    "classes": [],
+    "functions": [
+      "test_suggest_clarification_for_fuzzy_http_api_question",
+      "test_suggest_clarification_returns_none_for_unmatched_question"
     ],
     "warnings": []
   },
@@ -2690,6 +2834,7 @@
       "test_cli_ask_prints_grounded_answer_for_existing_index",
       "test_cli_ask_uses_ticket_anchor_retrieval_and_prunes_weak_sources",
       "test_cli_ask_accepts_related_terms_for_fuzzy_question",
+      "test_cli_ask_prints_clarification_suggestion_for_fuzzy_question",
       "test_cli_ask_routes_generated_answer_options_to_ask_service",
       "test_cli_ask_prints_stale_refusal_without_error_exit",
       "test_cli_ask_returns_error_for_missing_index",
@@ -4190,6 +4335,7 @@
       "code_context.agent.langgraph_graph",
       "code_context.agent.state",
       "code_context.answer_generation",
+      "code_context.clarification",
       "code_context.config",
       "code_context.drift",
       "code_context.llm",
@@ -4206,6 +4352,7 @@
       "code_context.agent.langgraph_graph",
       "code_context.agent.state",
       "code_context.answer_generation",
+      "code_context.clarification",
       "code_context.config",
       "code_context.drift",
       "code_context.llm",
@@ -4219,6 +4366,7 @@
     ],
     "functions": [
       "ask_indexed_code_question",
+      "build_clarification_ask_result",
       "build_generated_ask_result",
       "detect_snapshot_drift",
       "build_stale_ask_result",

@@ -425,6 +425,56 @@ def test_ask_indexed_code_question_uses_related_terms_for_fuzzy_question(
     assert result.sources[0].chunk.relative_path == "src/code_context/api.py"
 
 
+
+def test_ask_indexed_code_question_suggests_related_terms_for_fuzzy_question(
+    tmp_path: Path,
+) -> None:
+    source_file = tmp_path / "docs" / "project_brief.md"
+    source_file.parent.mkdir(parents=True)
+    source_file.write_bytes(
+        b"This project scans files and answers codebase questions.\n"
+    )
+    snapshot = _snapshot(
+        repo_root=tmp_path,
+        files=[_file_metadata(source_file, "docs/project_brief.md")],
+        chunks=[
+            _chunk(
+                chunk_id="docs/project_brief.md:1-1",
+                relative_path="docs/project_brief.md",
+                content="This project scans files and answers codebase questions.\n",
+            )
+        ],
+    )
+
+    result = ask_module.ask_indexed_code_question(
+        question="What part lets another program talk to this?",
+        snapshot=snapshot,
+        limit=1,
+        min_score=0.99,
+        minimum_results=1,
+        minimum_top_score=0.0,
+        prefer_langgraph=False,
+    )
+
+    assert result.confidence == "needs_clarification"
+    assert result.is_grounded is False
+    assert result.needs_clarification is True
+    assert result.suggested_question == (
+        "Where is the HTTP API layer implemented, and which routes does it expose?"
+    )
+    assert result.suggested_related_terms == [
+        "HTTP",
+        "API",
+        "FastAPI",
+        "endpoint",
+        "route",
+    ]
+    assert result.clarification_reason == (
+        "The question sounds like it may be asking about the HTTP API boundary."
+    )
+    assert "Try asking" in result.answer
+
+
 def test_ask_indexed_code_question_returns_insufficient_context(tmp_path: Path) -> None:
     source_file = tmp_path / "api.py"
     source_file.write_bytes(b"def health():\n    return {'status': 'ok'}\n")

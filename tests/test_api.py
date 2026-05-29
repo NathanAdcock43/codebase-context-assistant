@@ -339,6 +339,59 @@ def test_ask_endpoint_returns_grounded_answer_from_agent_workflow(tmp_path: Path
     ]
 
 
+
+def test_ask_endpoint_returns_clarification_suggestion_for_fuzzy_question(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    docs_file = repo / "docs" / "project_brief.md"
+    docs_file.parent.mkdir(parents=True)
+    docs_file.write_bytes(
+        b"This project scans files and answers codebase questions.\n"
+    )
+
+    index_dir = tmp_path / ".code_context_index"
+    client = TestClient(create_app())
+
+    index_response = client.post(
+        "/index",
+        json={
+            "repo_path": str(repo),
+            "index_dir": str(index_dir),
+            "max_lines": 20,
+            "overlap_lines": 0,
+        },
+    )
+    assert index_response.status_code == 200
+
+    ask_response = client.post(
+        "/ask",
+        json={
+            "index_dir": str(index_dir),
+            "question": "What part lets another program talk to this?",
+            "limit": 1,
+            "min_score": 0.99,
+            "minimum_results": 1,
+            "minimum_top_score": 0.0,
+        },
+    )
+
+    body = ask_response.json()
+
+    assert ask_response.status_code == 200
+    assert body["confidence"] == "needs_clarification"
+    assert body["is_grounded"] is False
+    assert body["needs_clarification"] is True
+    assert body["suggested_question"] == (
+        "Where is the HTTP API layer implemented, and which routes does it expose?"
+    )
+    assert body["suggested_related_terms"] == [
+        "HTTP",
+        "API",
+        "FastAPI",
+        "endpoint",
+        "route",
+    ]
+
+
 def test_ask_endpoint_refuses_when_context_is_insufficient(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()
