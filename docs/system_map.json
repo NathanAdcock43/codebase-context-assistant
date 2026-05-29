@@ -792,6 +792,7 @@
       "retrieve_grounded_context",
       "normalize_related_terms",
       "build_query_with_related_terms",
+      "find_matched_related_terms",
       "_prune_weak_trailing_results",
       "_determine_insufficient_reason",
       "_missing_requested_paths",
@@ -3850,6 +3851,98 @@
       "test_build_retrieval_query_includes_ui_phrase_anchors",
       "test_extract_query_anchors_handles_single_word_title_phrase_candidate",
       "test_extract_query_anchors_marks_plain_fuzzy_question_as_weak"
+    ],
+    "warnings": []
+  },
+  {
+    "path": "tests/test_related_term_metadata.py",
+    "role": "Verify matched related-term metadata across retrieval, ask, API, and CLI paths.",
+    "layer": "tests",
+    "flow": "related_term_metadata_validation",
+    "header_fields": {
+      "ROLE": "Verify matched related-term metadata across retrieval, ask, API, and CLI paths.",
+      "LAYER": "tests",
+      "FLOW": "related_term_metadata_validation",
+      "INPUTS": [
+        "fuzzy developer questions",
+        "explicit related terms",
+        "temporary repository files",
+        "indexed source chunks",
+        "CLI and API ask requests"
+      ],
+      "OUTPUTS": [
+        "matched related-term metadata assertions",
+        "API response metadata assertions",
+        "CLI output metadata assertions"
+      ],
+      "UPSTREAM": [
+        "retrieval service",
+        "ask workflow service",
+        "FastAPI ask endpoint",
+        "CLI ask command"
+      ],
+      "DOWNSTREAM": [
+        "local test runs",
+        "future CI guardrails",
+        "retrieval explainability behavior",
+        "future demo checks"
+      ],
+      "OWNS": [
+        "matched related-term metadata tests",
+        "related-term explainability assertions",
+        "end-to-end API and CLI related-term metadata coverage"
+      ],
+      "DOES_NOT_OWN": [
+        "low-level vector scoring tests",
+        "stale-index tests",
+        "LLM generation tests",
+        "clarification suggestion tests"
+      ],
+      "SIDE_EFFECTS": [
+        "writes temporary source files through pytest tmp_path",
+        "writes temporary JSON index files through indexing pipeline",
+        "captures CLI terminal output"
+      ],
+      "STATE": {
+        "reads": [
+          "temporary repository files",
+          "temporary JSON index files"
+        ],
+        "writes": [
+          "temporary repository files",
+          "temporary JSON index files",
+          "captured stdout and stderr"
+        ]
+      },
+      "NOTES": [
+        "Related terms are search aids, not source evidence.",
+        "Matched related-term metadata only reports terms found in retrieved source chunks."
+      ]
+    },
+    "imports": [
+      "__future__",
+      "code_context",
+      "code_context.api",
+      "code_context.index_store",
+      "code_context.models",
+      "code_context.pipeline",
+      "code_context.retrieval",
+      "fastapi.testclient",
+      "pathlib"
+    ],
+    "internal_imports": [
+      "code_context",
+      "code_context.api",
+      "code_context.index_store",
+      "code_context.models",
+      "code_context.pipeline",
+      "code_context.retrieval"
+    ],
+    "classes": [],
+    "functions": [
+      "test_retrieval_reports_matched_related_terms",
+      "test_api_ask_reports_matched_related_terms",
+      "test_cli_ask_prints_matched_related_terms"
     ],
     "warnings": []
   },

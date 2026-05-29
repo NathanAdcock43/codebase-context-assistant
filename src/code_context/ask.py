@@ -102,6 +102,7 @@ from code_context.retrieval import (
     DEFAULT_MINIMUM_TOP_SCORE,
     DEFAULT_RETRIEVAL_MIN_SCORE,
     build_query_with_related_terms,
+    find_matched_related_terms,
     normalize_related_terms,
 )
 from code_context.scanner import scan_repository
@@ -142,6 +143,7 @@ GENERATED_ANSWER_REFUSAL_MARKERS = (
 class AskWorkflowResult(BaseModel):
     question: str
     related_terms: list[str] = Field(default_factory=list)
+    matched_related_terms: list[str] = Field(default_factory=list)
     answer: str
     confidence: str
     is_grounded: bool
@@ -211,6 +213,7 @@ def ask_indexed_code_question(
     result = AskWorkflowResult(
         question=normalized_question,
         related_terms=normalized_related_terms,
+        matched_related_terms=find_matched_related_terms(sources, normalized_related_terms),
         answer=state.answer or "",
         confidence=confidence,
         is_grounded=is_grounded,

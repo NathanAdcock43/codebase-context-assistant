@@ -370,6 +370,9 @@ def format_ask_result(result: AskWorkflowResult) -> str:
     if result.related_terms:
         lines.append(f"Related terms: {', '.join(result.related_terms)}")
 
+    if result.matched_related_terms:
+        lines.append(f"Matched related terms: {', '.join(result.matched_related_terms)}")
+
     lines.extend(
         [
             f"Confidence: {result.confidence}",

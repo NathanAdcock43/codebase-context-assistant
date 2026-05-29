@@ -76,7 +76,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from code_context.index_store import DEFAULT_INDEX_FILENAME, JsonIndexStore
-from code_context.models import IndexSnapshot, RetrievalResponse
+from code_context.models import IndexSnapshot, RetrievalResponse, SearchResult
 from code_context.query_analysis import build_retrieval_query, extract_query_paths
 from code_context.vector_store import search_chunks
 
@@ -173,6 +173,7 @@ def retrieve_grounded_context(
     return RetrievalResponse(
         query=normalized_query,
         related_terms=normalized_related_terms,
+        matched_related_terms=find_matched_related_terms(results, normalized_related_terms),
         retrieval_query=retrieval_query,
         is_sufficient=insufficient_reason is None,
         insufficient_reason=insufficient_reason,
@@ -212,6 +213,29 @@ def build_query_with_related_terms(query: str, related_terms: Sequence[str] | No
             f"Related terms: {' '.join(normalized_terms)}",
         ]
     )
+
+
+
+def find_matched_related_terms(
+    results: Sequence[SearchResult],
+    related_terms: Sequence[str] | None = None,
+) -> list[str]:
+    """Return related terms that appear in retrieved source chunks."""
+    normalized_terms = normalize_related_terms(related_terms)
+    if not normalized_terms or not results:
+        return []
+
+    searchable_text = "\n".join(
+        f"{result.chunk.relative_path}\n{result.chunk.content}"
+        for result in results
+    ).casefold()
+
+    matched_terms: list[str] = []
+    for term in normalized_terms:
+        if term.casefold() in searchable_text:
+            matched_terms.append(term)
+
+    return matched_terms
 
 
 

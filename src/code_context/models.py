@@ -141,6 +141,7 @@ class SearchResult(BaseModel):
 class RetrievalResponse(BaseModel):
     query: str
     related_terms: list[str] = Field(default_factory=list)
+    matched_related_terms: list[str] = Field(default_factory=list)
     retrieval_query: str | None = Field(default=None)
     is_sufficient: bool
     insufficient_reason: str | None = Field(default=None)

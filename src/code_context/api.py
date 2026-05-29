@@ -162,6 +162,7 @@ class RetrieveRequest(BaseModel):
 class RetrieveResponse(BaseModel):
     query: str
     related_terms: list[str] = Field(default_factory=list)
+    matched_related_terms: list[str] = Field(default_factory=list)
     retrieval_query: str | None = None
     is_sufficient: bool
     insufficient_reason: str | None
@@ -201,6 +202,7 @@ class AskStepResponse(BaseModel):
 class AskResponse(BaseModel):
     question: str
     related_terms: list[str] = Field(default_factory=list)
+    matched_related_terms: list[str] = Field(default_factory=list)
     answer: str
     confidence: str
     is_grounded: bool
@@ -313,6 +315,7 @@ def create_app() -> FastAPI:
         return RetrieveResponse(
             query=retrieval_response.query,
             related_terms=retrieval_response.related_terms,
+            matched_related_terms=retrieval_response.matched_related_terms,
             retrieval_query=retrieval_response.retrieval_query,
             is_sufficient=retrieval_response.is_sufficient,
             insufficient_reason=retrieval_response.insufficient_reason,
@@ -355,6 +358,7 @@ def create_app() -> FastAPI:
         return AskResponse(
             question=result.question,
             related_terms=result.related_terms,
+            matched_related_terms=result.matched_related_terms,
             answer=result.answer,
             confidence=result.confidence,
             is_grounded=result.is_grounded,
