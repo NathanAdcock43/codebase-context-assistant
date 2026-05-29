@@ -377,6 +377,55 @@ def test_cli_ask_accepts_related_terms_for_fuzzy_question(
 
 
 
+
+def test_cli_ask_prints_clarification_for_grounded_docs_only_fuzzy_question(
+    capsys,
+    tmp_path: Path,
+) -> None:
+    repo = tmp_path / "repo"
+    docs_file = repo / "docs" / "project_brief.md"
+    docs_file.parent.mkdir(parents=True)
+    docs_file.write_bytes(
+        b"The project exposes a FastAPI API for codebase questions.\n"
+    )
+
+    index_dir = tmp_path / ".code_context_index"
+    index_repository(
+        repo,
+        index_dir=index_dir,
+        max_lines=20,
+        overlap_lines=0,
+    )
+
+    exit_code = cli.main(
+        [
+            "ask",
+            "--index-dir",
+            str(index_dir),
+            "--question",
+            "What part lets another program talk to this?",
+            "--limit",
+            "1",
+            "--min-score",
+            "0",
+            "--minimum-results",
+            "1",
+            "--minimum-top-score",
+            "0",
+            "--no-langgraph",
+        ]
+    )
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "Confidence: needs_clarification" in captured.out
+    assert "Clarification suggestion:" in captured.out
+    assert "Suggested related terms: HTTP, API, FastAPI, endpoint, route" in captured.out
+    assert "Retrieved context did not include implementation source files." in captured.out
+    assert captured.err == ""
+
+
 def test_cli_ask_prints_clarification_suggestion_for_fuzzy_question(
     capsys,
     tmp_path: Path,

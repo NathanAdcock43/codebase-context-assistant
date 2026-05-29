@@ -48,7 +48,11 @@ NOTES:
 - Suggestions are search aids, not source evidence.
 """
 
-from code_context.clarification import suggest_clarification
+from code_context.clarification import (
+    should_suggest_clarification_for_weak_alignment,
+    suggest_clarification,
+)
+from code_context.models import SearchResult, SourceChunk
 
 
 def test_suggest_clarification_for_fuzzy_http_api_question() -> None:
@@ -66,6 +70,67 @@ def test_suggest_clarification_for_fuzzy_http_api_question() -> None:
         "route",
     ]
     assert "HTTP API" in suggestion.reason
+
+
+
+def test_should_suggest_clarification_for_docs_only_fuzzy_implementation_question() -> None:
+    source = SearchResult(
+        chunk=_chunk(
+            relative_path="docs/project_brief.md",
+            content="The project exposes a FastAPI API for codebase questions.",
+        ),
+        score=0.8,
+    )
+
+    assert should_suggest_clarification_for_weak_alignment(
+        question="What part lets another program talk to this?",
+        sources=[source],
+        related_terms=[],
+    ) is True
+
+
+def test_should_not_suggest_clarification_when_implementation_source_is_retrieved() -> None:
+    source = SearchResult(
+        chunk=_chunk(
+            relative_path="src/code_context/api.py",
+            content="def create_app():\n    app = FastAPI()",
+        ),
+        score=0.8,
+    )
+
+    assert should_suggest_clarification_for_weak_alignment(
+        question="What part lets another program talk to this?",
+        sources=[source],
+        related_terms=[],
+    ) is False
+
+
+def test_should_not_suggest_clarification_when_user_supplied_related_terms() -> None:
+    source = SearchResult(
+        chunk=_chunk(
+            relative_path="docs/project_brief.md",
+            content="The project exposes a FastAPI API for codebase questions.",
+        ),
+        score=0.8,
+    )
+
+    assert should_suggest_clarification_for_weak_alignment(
+        question="What part lets another program talk to this?",
+        sources=[source],
+        related_terms=["HTTP", "API"],
+    ) is False
+
+
+def _chunk(*, relative_path: str, content: str) -> SourceChunk:
+    return SourceChunk(
+        chunk_id=f"{relative_path}:1-1",
+        relative_path=relative_path,
+        start_line=1,
+        end_line=1,
+        content=content,
+        language="python",
+    )
+
 
 
 def test_suggest_clarification_returns_none_for_unmatched_question() -> None:

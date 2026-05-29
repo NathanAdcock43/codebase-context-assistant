@@ -92,7 +92,10 @@ from pydantic import BaseModel, Field
 from code_context.agent.langgraph_graph import run_code_question_workflow_with_optional_langgraph
 from code_context.agent.state import AgentStep
 from code_context.answer_generation import generate_grounded_answer
-from code_context.clarification import suggest_clarification
+from code_context.clarification import (
+    should_suggest_clarification_for_weak_alignment,
+    suggest_clarification,
+)
 from code_context.config import load_app_config
 from code_context.drift import detect_drift
 from code_context.llm import LlmClient
@@ -225,6 +228,23 @@ def ask_indexed_code_question(
         steps=state.steps,
     )
 
+    if is_grounded and should_suggest_clarification_for_weak_alignment(
+        question=normalized_question,
+        sources=sources,
+        related_terms=normalized_related_terms,
+    ):
+        clarification_result = build_clarification_ask_result(
+            result,
+            answer_intro=(
+                "I found related indexed context, but it may not be the implementation area you meant."
+            ),
+            reason_suffix=(
+                "Retrieved context did not include implementation source files."
+            ),
+        )
+        if clarification_result is not None:
+            return clarification_result
+
     if not is_grounded and not normalized_related_terms:
         clarification_result = build_clarification_ask_result(result)
         if clarification_result is not None:
@@ -241,26 +261,39 @@ def ask_indexed_code_question(
     )
 
 
-def build_clarification_ask_result(result: AskWorkflowResult) -> AskWorkflowResult | None:
+def build_clarification_ask_result(
+    result: AskWorkflowResult,
+    *,
+    answer_intro: str | None = None,
+    reason_suffix: str | None = None,
+) -> AskWorkflowResult | None:
     """Add a deterministic clarification suggestion when retrieval likely missed intent."""
     suggestion = suggest_clarification(result.question)
     if suggestion is None:
         return None
 
     related_terms_text = ", ".join(suggestion.suggested_related_terms)
+    intro = (
+        answer_intro
+        or "I found insufficient indexed context for that wording, but the question may be fuzzy."
+    )
+    clarification_reason = suggestion.reason
+    if reason_suffix:
+        clarification_reason = f"{clarification_reason} {reason_suffix}"
 
     return result.model_copy(
         update={
             "answer": (
-                "I found insufficient indexed context for that wording, but the question may be fuzzy. "
+                f"{intro} "
                 f"Try asking: \"{suggestion.suggested_question}\" "
                 f"with related terms: {related_terms_text}."
             ),
             "confidence": "needs_clarification",
+            "is_grounded": False,
             "needs_clarification": True,
             "suggested_question": suggestion.suggested_question,
             "suggested_related_terms": suggestion.suggested_related_terms,
-            "clarification_reason": suggestion.reason,
+            "clarification_reason": clarification_reason,
         }
     )
 

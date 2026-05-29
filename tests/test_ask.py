@@ -426,6 +426,49 @@ def test_ask_indexed_code_question_uses_related_terms_for_fuzzy_question(
 
 
 
+
+def test_ask_indexed_code_question_suggests_clarification_for_grounded_docs_only_fuzzy_question(
+    tmp_path: Path,
+) -> None:
+    docs_file = tmp_path / "docs" / "project_brief.md"
+    docs_file.parent.mkdir(parents=True)
+    docs_file.write_bytes(
+        b"The project exposes a FastAPI API for codebase questions.\n"
+    )
+
+    snapshot = _snapshot(
+        repo_root=tmp_path,
+        files=[_file_metadata(docs_file, "docs/project_brief.md")],
+        chunks=[
+            _chunk(
+                chunk_id="docs/project_brief.md:1-1",
+                relative_path="docs/project_brief.md",
+                content="The project exposes a FastAPI API for codebase questions.\n",
+            )
+        ],
+    )
+
+    result = ask_module.ask_indexed_code_question(
+        question="What part lets another program talk to this?",
+        snapshot=snapshot,
+        limit=1,
+        min_score=0.0,
+        minimum_results=1,
+        minimum_top_score=0.0,
+        prefer_langgraph=False,
+    )
+
+    assert result.confidence == "needs_clarification"
+    assert result.is_grounded is False
+    assert result.needs_clarification is True
+    assert result.sources[0].chunk.relative_path == "docs/project_brief.md"
+    assert result.suggested_related_terms == ["HTTP", "API", "FastAPI", "endpoint", "route"]
+    assert "may not be the implementation area" in result.answer
+    assert "Retrieved context did not include implementation source files." in (
+        result.clarification_reason or ""
+    )
+
+
 def test_ask_indexed_code_question_suggests_related_terms_for_fuzzy_question(
     tmp_path: Path,
 ) -> None:

@@ -55,7 +55,11 @@ NOTES:
 - Keep the first concept library small and explainable.
 """
 
+from collections.abc import Sequence
+
 from pydantic import BaseModel, Field
+
+from code_context.models import SearchResult
 
 
 class ClarificationSuggestion(BaseModel):
@@ -139,6 +143,48 @@ _CONCEPT_SUGGESTIONS: tuple[tuple[tuple[str, ...], ClarificationSuggestion], ...
         ),
     ),
 )
+
+
+
+def should_suggest_clarification_for_weak_alignment(
+    *,
+    question: str,
+    sources: Sequence[SearchResult],
+    related_terms: Sequence[str] | None = None,
+) -> bool:
+    """Return true when grounded retrieval likely missed the implementation area."""
+    if related_terms:
+        return False
+
+    if not sources:
+        return False
+
+    if suggest_clarification(question) is None:
+        return False
+
+    return not any(
+        _is_implementation_source_path(source.chunk.relative_path)
+        for source in sources
+    )
+
+
+def _is_implementation_source_path(relative_path: str) -> bool:
+    normalized_path = relative_path.replace("\\", "/").casefold()
+
+    if normalized_path.startswith("tests/") or "/tests/" in normalized_path:
+        return False
+
+    if normalized_path.startswith("docs/"):
+        return False
+
+    if ".egg-info/" in normalized_path:
+        return False
+
+    if normalized_path.endswith("sources.txt"):
+        return False
+
+    return normalized_path.startswith("src/")
+
 
 
 def suggest_clarification(question: str) -> ClarificationSuggestion | None:

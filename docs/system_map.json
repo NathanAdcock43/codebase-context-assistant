@@ -581,13 +581,19 @@
     },
     "imports": [
       "__future__",
+      "code_context.models",
+      "collections.abc",
       "pydantic"
     ],
-    "internal_imports": [],
+    "internal_imports": [
+      "code_context.models"
+    ],
     "classes": [
       "ClarificationSuggestion"
     ],
     "functions": [
+      "should_suggest_clarification_for_weak_alignment",
+      "_is_implementation_source_path",
       "suggest_clarification"
     ],
     "warnings": []
@@ -2245,6 +2251,7 @@
       "test_retrieve_endpoint_reports_insufficient_context",
       "test_retrieve_endpoint_returns_404_when_index_is_missing",
       "test_ask_endpoint_returns_grounded_answer_from_agent_workflow",
+      "test_ask_endpoint_returns_clarification_for_grounded_docs_only_fuzzy_question",
       "test_ask_endpoint_returns_clarification_suggestion_for_fuzzy_question",
       "test_ask_endpoint_refuses_when_context_is_insufficient",
       "test_ask_endpoint_prunes_weak_trailing_sources",
@@ -2559,6 +2566,7 @@
       "test_generated_answer_reports_insufficient_context_for_indexed_context_phrases",
       "test_ask_indexed_code_question_uses_enriched_ticket_anchors_for_grounding",
       "test_ask_indexed_code_question_uses_related_terms_for_fuzzy_question",
+      "test_ask_indexed_code_question_suggests_clarification_for_grounded_docs_only_fuzzy_question",
       "test_ask_indexed_code_question_suggests_related_terms_for_fuzzy_question",
       "test_ask_indexed_code_question_returns_insufficient_context",
       "test_ask_indexed_code_question_refuses_when_named_source_path_is_missing",
@@ -2708,14 +2716,20 @@
     },
     "imports": [
       "__future__",
-      "code_context.clarification"
+      "code_context.clarification",
+      "code_context.models"
     ],
     "internal_imports": [
-      "code_context.clarification"
+      "code_context.clarification",
+      "code_context.models"
     ],
     "classes": [],
     "functions": [
       "test_suggest_clarification_for_fuzzy_http_api_question",
+      "test_should_suggest_clarification_for_docs_only_fuzzy_implementation_question",
+      "test_should_not_suggest_clarification_when_implementation_source_is_retrieved",
+      "test_should_not_suggest_clarification_when_user_supplied_related_terms",
+      "_chunk",
       "test_suggest_clarification_returns_none_for_unmatched_question"
     ],
     "warnings": []
@@ -2835,6 +2849,7 @@
       "test_cli_ask_prints_grounded_answer_for_existing_index",
       "test_cli_ask_uses_ticket_anchor_retrieval_and_prunes_weak_sources",
       "test_cli_ask_accepts_related_terms_for_fuzzy_question",
+      "test_cli_ask_prints_clarification_for_grounded_docs_only_fuzzy_question",
       "test_cli_ask_prints_clarification_suggestion_for_fuzzy_question",
       "test_cli_ask_routes_generated_answer_options_to_ask_service",
       "test_cli_ask_prints_stale_refusal_without_error_exit",
