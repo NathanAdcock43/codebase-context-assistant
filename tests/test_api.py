@@ -497,6 +497,63 @@ def test_ask_endpoint_refuses_when_named_source_path_is_missing(tmp_path: Path) 
     assert body["citations"] == []
     assert body["answer"]
 
+
+def test_ask_endpoint_uses_related_terms_for_fuzzy_question(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    api_file = repo / "src" / "code_context" / "api.py"
+    docs_file = repo / "docs" / "project_brief.md"
+    api_file.parent.mkdir(parents=True)
+    docs_file.parent.mkdir(parents=True)
+
+    api_file.write_bytes(
+        b"def create_app():\n"
+        b"    app = FastAPI()\n"
+        b"    @app.post('/ask')\n"
+        b"    def ask_question():\n"
+        b"        return {'answer': 'ok'}\n"
+    )
+    docs_file.write_bytes(
+        b"This project helps developers understand code.\n"
+        b"It scans files and answers questions.\n"
+    )
+
+    index_dir = tmp_path / ".code_context_index"
+    client = TestClient(create_app())
+
+    index_response = client.post(
+        "/index",
+        json={
+            "repo_path": str(repo),
+            "index_dir": str(index_dir),
+            "max_lines": 20,
+            "overlap_lines": 0,
+        },
+    )
+    assert index_response.status_code == 200
+
+    ask_response = client.post(
+        "/ask",
+        json={
+            "index_dir": str(index_dir),
+            "question": "What part lets another program talk to this?",
+            "related_terms": ["HTTP", "API", "FastAPI", "endpoint", "route"],
+            "limit": 2,
+            "min_score": 0.0,
+            "minimum_results": 1,
+            "minimum_top_score": 0.0,
+        },
+    )
+
+    body = ask_response.json()
+
+    assert ask_response.status_code == 200
+    assert body["question"] == "What part lets another program talk to this?"
+    assert body["related_terms"] == ["HTTP", "API", "FastAPI", "endpoint", "route"]
+    assert body["confidence"] == "grounded"
+    assert body["is_grounded"] is True
+    assert body["sources"][0]["relative_path"] == "src/code_context/api.py"
+
+
 def test_ask_endpoint_refuses_when_index_is_stale(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -661,6 +718,7 @@ def test_ask_endpoint_routes_llm_model_override_without_temperature(
         minimum_results: int,
         minimum_top_score: float,
         prefer_langgraph: bool,
+        related_terms: list[str] | None,
         use_llm: bool,
         llm_model: str | None,
         llm_temperature: float | None,
@@ -672,6 +730,7 @@ def test_ask_endpoint_routes_llm_model_override_without_temperature(
         calls["minimum_results"] = minimum_results
         calls["minimum_top_score"] = minimum_top_score
         calls["prefer_langgraph"] = prefer_langgraph
+        calls["related_terms"] = related_terms
         calls["use_llm"] = use_llm
         calls["llm_model"] = llm_model
         calls["llm_temperature"] = llm_temperature
@@ -724,6 +783,7 @@ def test_ask_endpoint_routes_llm_model_override_without_temperature(
     assert isinstance(calls["snapshot"], IndexSnapshot)
     assert calls["limit"] == 3
     assert calls["prefer_langgraph"] is True
+    assert calls["related_terms"] == []
     assert calls["use_llm"] is True
     assert calls["llm_model"] == "gpt-5.5"
     assert calls["llm_temperature"] is None

@@ -151,6 +151,7 @@ class SearchResponse(BaseModel):
 class RetrieveRequest(BaseModel):
     index_dir: str
     query: str
+    related_terms: list[str] = Field(default_factory=list)
     limit: int = Field(default=5, ge=1)
     min_score: float = Field(default=DEFAULT_RETRIEVAL_MIN_SCORE, ge=0.0)
     minimum_results: int = Field(default=1, ge=1)
@@ -160,6 +161,8 @@ class RetrieveRequest(BaseModel):
 
 class RetrieveResponse(BaseModel):
     query: str
+    related_terms: list[str] = Field(default_factory=list)
+    retrieval_query: str | None = None
     is_sufficient: bool
     insufficient_reason: str | None
     result_count: int
@@ -169,6 +172,7 @@ class RetrieveResponse(BaseModel):
 class AskRequest(BaseModel):
     index_dir: str
     question: str = Field(min_length=1)
+    related_terms: list[str] = Field(default_factory=list)
     limit: int = Field(default=5, ge=1)
     min_score: float = Field(default=DEFAULT_RETRIEVAL_MIN_SCORE, ge=0.0)
     minimum_results: int = Field(default=1, ge=1)
@@ -196,6 +200,7 @@ class AskStepResponse(BaseModel):
 
 class AskResponse(BaseModel):
     question: str
+    related_terms: list[str] = Field(default_factory=list)
     answer: str
     confidence: str
     is_grounded: bool
@@ -287,6 +292,7 @@ def create_app() -> FastAPI:
             retrieval_response = load_and_retrieve_context(
                 index_dir=request.index_dir,
                 query=request.query,
+                related_terms=request.related_terms,
                 limit=request.limit,
                 min_score=request.min_score,
                 minimum_results=request.minimum_results,
@@ -302,6 +308,8 @@ def create_app() -> FastAPI:
 
         return RetrieveResponse(
             query=retrieval_response.query,
+            related_terms=retrieval_response.related_terms,
+            retrieval_query=retrieval_response.retrieval_query,
             is_sufficient=retrieval_response.is_sufficient,
             insufficient_reason=retrieval_response.insufficient_reason,
             result_count=len(response_results),
@@ -319,6 +327,7 @@ def create_app() -> FastAPI:
             result = ask_indexed_code_question(
                 question=request.question,
                 snapshot=snapshot,
+                related_terms=request.related_terms,
                 limit=request.limit,
                 min_score=request.min_score,
                 minimum_results=request.minimum_results,
@@ -341,6 +350,7 @@ def create_app() -> FastAPI:
 
         return AskResponse(
             question=result.question,
+            related_terms=result.related_terms,
             answer=result.answer,
             confidence=result.confidence,
             is_grounded=result.is_grounded,

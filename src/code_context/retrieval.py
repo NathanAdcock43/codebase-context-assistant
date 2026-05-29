@@ -72,6 +72,7 @@ NOTES:
 - If a query names a source path, retrieved context must include that path to be considered sufficient.
 """
 
+from collections.abc import Sequence
 from pathlib import Path
 
 from code_context.index_store import DEFAULT_INDEX_FILENAME, JsonIndexStore
@@ -88,6 +89,7 @@ def load_and_retrieve_context(
     *,
     index_dir: Path | str,
     query: str,
+    related_terms: Sequence[str] | None = None,
     limit: int = 5,
     min_score: float = DEFAULT_RETRIEVAL_MIN_SCORE,
     minimum_results: int = 1,
@@ -100,6 +102,7 @@ def load_and_retrieve_context(
     return retrieve_grounded_context(
         snapshot=snapshot,
         query=query,
+        related_terms=related_terms,
         limit=limit,
         min_score=min_score,
         minimum_results=minimum_results,
@@ -111,6 +114,7 @@ def retrieve_grounded_context(
     *,
     snapshot: IndexSnapshot,
     query: str,
+    related_terms: Sequence[str] | None = None,
     limit: int = 5,
     min_score: float = DEFAULT_RETRIEVAL_MIN_SCORE,
     minimum_results: int = 1,
@@ -125,10 +129,13 @@ def retrieve_grounded_context(
     )
 
     normalized_query = query.strip()
+    normalized_related_terms = normalize_related_terms(related_terms)
 
     if not normalized_query:
         return RetrievalResponse(
             query=normalized_query,
+            related_terms=normalized_related_terms,
+            retrieval_query=None,
             is_sufficient=False,
             insufficient_reason="Query is empty.",
             results=[],
@@ -137,12 +144,16 @@ def retrieve_grounded_context(
     if not snapshot.chunks:
         return RetrievalResponse(
             query=normalized_query,
+            related_terms=normalized_related_terms,
+            retrieval_query=None,
             is_sufficient=False,
             insufficient_reason="The index does not contain any chunks to search.",
             results=[],
         )
 
-    retrieval_query = build_retrieval_query(normalized_query)
+    retrieval_query = build_retrieval_query(
+        build_query_with_related_terms(normalized_query, normalized_related_terms)
+    )
     results = search_chunks(
         snapshot.chunks,
         retrieval_query,
@@ -161,10 +172,47 @@ def retrieve_grounded_context(
 
     return RetrievalResponse(
         query=normalized_query,
+        related_terms=normalized_related_terms,
+        retrieval_query=retrieval_query,
         is_sufficient=insufficient_reason is None,
         insufficient_reason=insufficient_reason,
         results=results,
     )
+
+
+def normalize_related_terms(related_terms: Sequence[str] | None = None) -> list[str]:
+    """Normalize user-provided related terms for deterministic retrieval."""
+    normalized_terms: list[str] = []
+    seen: set[str] = set()
+
+    for raw_term in related_terms or []:
+        term = " ".join(str(raw_term).strip().split())
+        if not term:
+            continue
+
+        term_key = term.casefold()
+        if term_key in seen:
+            continue
+
+        seen.add(term_key)
+        normalized_terms.append(term)
+
+    return normalized_terms
+
+
+def build_query_with_related_terms(query: str, related_terms: Sequence[str] | None = None) -> str:
+    """Append explicit user-provided related terms to retrieval text."""
+    normalized_terms = normalize_related_terms(related_terms)
+    if not normalized_terms:
+        return query
+
+    return "\n\n".join(
+        [
+            query,
+            f"Related terms: {' '.join(normalized_terms)}",
+        ]
+    )
+
 
 
 def _prune_weak_trailing_results(

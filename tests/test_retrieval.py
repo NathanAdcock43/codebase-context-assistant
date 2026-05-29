@@ -337,6 +337,50 @@ def test_retrieve_grounded_context_uses_enriched_ticket_anchors_for_real_search(
     assert response.results[0].chunk.relative_path == "src/exports/options.py"
     assert "CUSTOMER_EXPORT_STATUS" in response.results[0].chunk.content
 
+
+def test_retrieve_grounded_context_uses_related_terms_for_fuzzy_http_api_question() -> None:
+    snapshot = _snapshot(
+        chunks=[
+            _chunk(
+                chunk_id="src/code_context/api.py:1-6",
+                relative_path="src/code_context/api.py",
+                content=(
+                    "def create_app():\n"
+                    "    app = FastAPI()\n"
+                    "    @app.post('/ask')\n"
+                    "    def ask_question():\n"
+                    "        return {'answer': 'ok'}\n"
+                ),
+            ),
+            _chunk(
+                chunk_id="docs/project_brief.md:1-4",
+                relative_path="docs/project_brief.md",
+                content=(
+                    "This project helps a developer understand a codebase.\n"
+                    "It scans files and answers questions with grounded context.\n"
+                ),
+            ),
+        ]
+    )
+
+    response = retrieve_grounded_context(
+        snapshot=snapshot,
+        query="What part lets another program talk to this?",
+        related_terms=["HTTP", "API", "FastAPI", "endpoint", "route"],
+        limit=2,
+        min_score=0.0,
+        minimum_results=1,
+        minimum_top_score=0.0,
+    )
+
+    assert response.query == "What part lets another program talk to this?"
+    assert response.related_terms == ["HTTP", "API", "FastAPI", "endpoint", "route"]
+    assert response.retrieval_query is not None
+    assert "Related terms:" in response.retrieval_query
+    assert response.is_sufficient is True
+    assert response.results[0].chunk.relative_path == "src/code_context/api.py"
+
+
 def test_load_and_retrieve_context_loads_saved_snapshot(tmp_path: Path) -> None:
     index_dir = tmp_path / ".code_context_index"
     snapshot = _snapshot(

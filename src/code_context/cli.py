@@ -184,6 +184,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="Maximum number of retrieved chunks to use.",
     )
     ask_parser.add_argument(
+        "--related-term",
+        action="append",
+        default=[],
+        help="Related search term to improve fuzzy deterministic retrieval. Can be passed more than once.",
+    )
+    ask_parser.add_argument(
+        "--related-terms",
+        default=None,
+        help="Comma-separated related search terms to improve fuzzy deterministic retrieval.",
+    )
+    ask_parser.add_argument(
         "--min-score",
         type=float,
         default=0.15,
@@ -282,6 +293,7 @@ def _run_ask_command(args: argparse.Namespace) -> int:
         result = ask_indexed_code_question(
             question=args.question,
             snapshot=snapshot,
+            related_terms=_collect_related_terms(args),
             limit=args.limit,
             min_score=args.min_score,
             minimum_results=args.minimum_results,
@@ -315,6 +327,25 @@ def _run_drift_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def _collect_related_terms(args: argparse.Namespace) -> list[str]:
+    """Collect repeated and comma-separated related terms from CLI args."""
+    related_terms: list[str] = []
+
+    for term in args.related_term or []:
+        if term.strip():
+            related_terms.append(term.strip())
+
+    if args.related_terms:
+        related_terms.extend(
+            term.strip()
+            for term in args.related_terms.split(",")
+            if term.strip()
+        )
+
+    return related_terms
+
+
+
 def format_index_result(snapshot: IndexSnapshot, index_path: Path) -> str:
     """Format an index result for terminal output."""
     lines = [
@@ -334,11 +365,19 @@ def format_ask_result(result: AskWorkflowResult) -> str:
     """Format an ask result for terminal output."""
     lines = [
         f"Question: {result.question}",
-        f"Confidence: {result.confidence}",
-        f"Grounded: {_yes_no(result.is_grounded)}",
-        f"Stale: {_yes_no(result.is_stale)}",
-        f"LLM generated: {_yes_no(result.is_llm_generated)}",
     ]
+
+    if result.related_terms:
+        lines.append(f"Related terms: {', '.join(result.related_terms)}")
+
+    lines.extend(
+        [
+            f"Confidence: {result.confidence}",
+            f"Grounded: {_yes_no(result.is_grounded)}",
+            f"Stale: {_yes_no(result.is_stale)}",
+            f"LLM generated: {_yes_no(result.is_llm_generated)}",
+        ]
+    )
 
     if result.is_llm_generated:
         lines.extend(

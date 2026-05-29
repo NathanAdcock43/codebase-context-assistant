@@ -100,6 +100,7 @@ def test_ask_endpoint_routes_through_ask_workflow_service(
         minimum_results: int,
         minimum_top_score: float,
         prefer_langgraph: bool,
+        related_terms: list[str] | None,
         use_llm: bool,
         llm_model: str | None,
         llm_temperature: float | None,
@@ -111,6 +112,7 @@ def test_ask_endpoint_routes_through_ask_workflow_service(
         calls["minimum_results"] = minimum_results
         calls["minimum_top_score"] = minimum_top_score
         calls["prefer_langgraph"] = prefer_langgraph
+        calls["related_terms"] = related_terms
         calls["use_llm"] = use_llm
         calls["llm_model"] = llm_model
         calls["llm_temperature"] = llm_temperature
@@ -191,6 +193,7 @@ def test_ask_endpoint_routes_through_ask_workflow_service(
     assert calls["minimum_results"] == 2
     assert calls["minimum_top_score"] == 0.5
     assert calls["prefer_langgraph"] is True
+    assert calls["related_terms"] == []
     assert calls["use_llm"] is False
     assert calls["llm_model"] is None
     assert calls["llm_temperature"] is None
@@ -219,6 +222,7 @@ def test_ask_endpoint_routes_generated_answer_request_fields_to_ask_service(
         minimum_results: int,
         minimum_top_score: float,
         prefer_langgraph: bool,
+        related_terms: list[str] | None,
         use_llm: bool,
         llm_model: str | None,
         llm_temperature: float,
@@ -230,6 +234,7 @@ def test_ask_endpoint_routes_generated_answer_request_fields_to_ask_service(
         calls["minimum_results"] = minimum_results
         calls["minimum_top_score"] = minimum_top_score
         calls["prefer_langgraph"] = prefer_langgraph
+        calls["related_terms"] = related_terms
         calls["use_llm"] = use_llm
         calls["llm_model"] = llm_model
         calls["llm_temperature"] = llm_temperature
@@ -308,6 +313,7 @@ def test_ask_endpoint_routes_generated_answer_request_fields_to_ask_service(
     assert calls["minimum_results"] == 2
     assert calls["minimum_top_score"] == 0.5
     assert calls["prefer_langgraph"] is True
+    assert calls["related_terms"] == []
     assert calls["use_llm"] is True
     assert calls["llm_model"] == "fake-model"
     assert calls["llm_temperature"] == 0.1

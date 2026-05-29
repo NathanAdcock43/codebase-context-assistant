@@ -83,6 +83,7 @@ NOTES:
 - The optional LangGraph adapter owns fallback to the deterministic workflow when LangGraph is unavailable.
 """
 
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -96,7 +97,12 @@ from code_context.drift import detect_drift
 from code_context.llm import LlmClient
 from code_context.llm_factory import build_configured_llm_client
 from code_context.models import DriftReport, IndexSnapshot, SearchResult
-from code_context.retrieval import DEFAULT_MINIMUM_TOP_SCORE, DEFAULT_RETRIEVAL_MIN_SCORE
+from code_context.retrieval import (
+    DEFAULT_MINIMUM_TOP_SCORE,
+    DEFAULT_RETRIEVAL_MIN_SCORE,
+    build_query_with_related_terms,
+    normalize_related_terms,
+)
 from code_context.scanner import scan_repository
 
 
@@ -134,6 +140,7 @@ GENERATED_ANSWER_REFUSAL_MARKERS = (
 
 class AskWorkflowResult(BaseModel):
     question: str
+    related_terms: list[str] = Field(default_factory=list)
     answer: str
     confidence: str
     is_grounded: bool
@@ -153,6 +160,7 @@ def ask_indexed_code_question(
     *,
     question: str,
     snapshot: IndexSnapshot,
+    related_terms: Sequence[str] | None = None,
     limit: int = 5,
     min_score: float = DEFAULT_RETRIEVAL_MIN_SCORE,
     minimum_results: int = 1,
@@ -164,13 +172,23 @@ def ask_indexed_code_question(
     llm_temperature: float = 0.0,
 ) -> AskWorkflowResult:
     """Answer a code question against an index snapshot or return a refusal."""
+    normalized_question = question.strip()
+    normalized_related_terms = normalize_related_terms(related_terms)
+    workflow_question = build_query_with_related_terms(
+        normalized_question,
+        normalized_related_terms,
+    )
+
     drift_report = detect_snapshot_drift(snapshot)
 
     if drift_report.is_stale:
-        return build_stale_ask_result(question)
+        return build_stale_ask_result(
+            normalized_question,
+            related_terms=normalized_related_terms,
+        )
 
     state = run_code_question_workflow_with_optional_langgraph(
-        question=question,
+        question=workflow_question,
         snapshot=snapshot,
         limit=limit,
         min_score=min_score,
@@ -186,7 +204,8 @@ def ask_indexed_code_question(
     sources = state.retrieval.results if state.retrieval else []
 
     result = AskWorkflowResult(
-        question=state.question,
+        question=normalized_question,
+        related_terms=normalized_related_terms,
         answer=state.answer or "",
         confidence=confidence,
         is_grounded=is_grounded,
@@ -262,10 +281,15 @@ def detect_snapshot_drift(snapshot: IndexSnapshot) -> DriftReport:
     return detect_drift(snapshot=snapshot, current_files=current_files)
 
 
-def build_stale_ask_result(question: str) -> AskWorkflowResult:
+def build_stale_ask_result(
+    question: str,
+    *,
+    related_terms: Sequence[str] | None = None,
+) -> AskWorkflowResult:
     """Build an ask result that refuses because indexed context is stale."""
     return AskWorkflowResult(
         question=question.strip(),
+        related_terms=normalize_related_terms(related_terms),
         answer=(
             "I cannot answer from this index because the indexed context is stale. "
             "Re-index the repository and ask again."

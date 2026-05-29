@@ -357,6 +357,74 @@ def test_ask_indexed_code_question_uses_enriched_ticket_anchors_for_grounding(
     assert any("src/exports/options.py" in citation for citation in result.citations)
     assert result.answer
 
+
+def test_ask_indexed_code_question_uses_related_terms_for_fuzzy_question(
+    tmp_path: Path,
+) -> None:
+    api_file = tmp_path / "src" / "code_context" / "api.py"
+    docs_file = tmp_path / "docs" / "project_brief.md"
+    api_file.parent.mkdir(parents=True)
+    docs_file.parent.mkdir(parents=True)
+
+    api_file.write_bytes(
+        b"def create_app():\n"
+        b"    app = FastAPI()\n"
+        b"    @app.post('/ask')\n"
+        b"    def ask_question():\n"
+        b"        return {'answer': 'ok'}\n"
+    )
+    docs_file.write_bytes(
+        b"This project helps developers understand code.\n"
+        b"It scans files and answers questions.\n"
+    )
+
+    snapshot = _snapshot(
+        repo_root=tmp_path,
+        files=[
+            _file_metadata(api_file, "src/code_context/api.py"),
+            _file_metadata(docs_file, "docs/project_brief.md"),
+        ],
+        chunks=[
+            _chunk(
+                chunk_id="src/code_context/api.py:1-5",
+                relative_path="src/code_context/api.py",
+                content=(
+                    "def create_app():\n"
+                    "    app = FastAPI()\n"
+                    "    @app.post('/ask')\n"
+                    "    def ask_question():\n"
+                    "        return {'answer': 'ok'}\n"
+                ),
+            ),
+            _chunk(
+                chunk_id="docs/project_brief.md:1-2",
+                relative_path="docs/project_brief.md",
+                content=(
+                    "This project helps developers understand code.\n"
+                    "It scans files and answers questions.\n"
+                ),
+            ),
+        ],
+    )
+
+    result = ask_module.ask_indexed_code_question(
+        question="What part lets another program talk to this?",
+        related_terms=["HTTP", "API", "FastAPI", "endpoint", "route"],
+        snapshot=snapshot,
+        limit=2,
+        min_score=0.0,
+        minimum_results=1,
+        minimum_top_score=0.0,
+        prefer_langgraph=False,
+    )
+
+    assert result.question == "What part lets another program talk to this?"
+    assert result.related_terms == ["HTTP", "API", "FastAPI", "endpoint", "route"]
+    assert result.confidence == "grounded"
+    assert result.is_grounded is True
+    assert result.sources[0].chunk.relative_path == "src/code_context/api.py"
+
+
 def test_ask_indexed_code_question_returns_insufficient_context(tmp_path: Path) -> None:
     source_file = tmp_path / "api.py"
     source_file.write_bytes(b"def health():\n    return {'status': 'ok'}\n")

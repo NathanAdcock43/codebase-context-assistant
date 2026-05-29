@@ -310,6 +310,72 @@ def test_cli_ask_uses_ticket_anchor_retrieval_and_prunes_weak_sources(
     assert "src/navigation/menu.py" not in captured.out
     assert captured.err == ""
 
+
+def test_cli_ask_accepts_related_terms_for_fuzzy_question(
+    capsys,
+    tmp_path: Path,
+) -> None:
+    repo = tmp_path / "repo"
+    api_file = repo / "src" / "code_context" / "api.py"
+    docs_file = repo / "docs" / "project_brief.md"
+    api_file.parent.mkdir(parents=True)
+    docs_file.parent.mkdir(parents=True)
+
+    api_file.write_bytes(
+        b"def create_app():\n"
+        b"    app = FastAPI()\n"
+        b"    @app.post('/ask')\n"
+        b"    def ask_question():\n"
+        b"        return {'answer': 'ok'}\n"
+    )
+    docs_file.write_bytes(
+        b"This project helps developers understand code.\n"
+        b"It scans files and answers questions.\n"
+    )
+
+    index_dir = tmp_path / ".code_context_index"
+    index_repository(
+        repo,
+        index_dir=index_dir,
+        max_lines=20,
+        overlap_lines=0,
+    )
+
+    exit_code = cli.main(
+        [
+            "ask",
+            "--index-dir",
+            str(index_dir),
+            "--question",
+            "What part lets another program talk to this?",
+            "--related-term",
+            "HTTP",
+            "--related-term",
+            "API",
+            "--related-terms",
+            "FastAPI,endpoint,route",
+            "--limit",
+            "2",
+            "--min-score",
+            "0",
+            "--minimum-results",
+            "1",
+            "--minimum-top-score",
+            "0",
+            "--no-langgraph",
+        ]
+    )
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "Question: What part lets another program talk to this?" in captured.out
+    assert "Related terms: HTTP, API, FastAPI, endpoint, route" in captured.out
+    assert "Confidence: grounded" in captured.out
+    assert "src/code_context/api.py" in captured.out
+    assert captured.err == ""
+
+
 def test_cli_ask_routes_generated_answer_options_to_ask_service(
     monkeypatch: Any,
     capsys: Any,
@@ -342,6 +408,7 @@ def test_cli_ask_routes_generated_answer_options_to_ask_service(
         minimum_results: int,
         minimum_top_score: float,
         prefer_langgraph: bool,
+        related_terms: list[str] | None,
         use_llm: bool,
         llm_model: str | None,
         llm_temperature: float | None,
@@ -353,6 +420,7 @@ def test_cli_ask_routes_generated_answer_options_to_ask_service(
         calls["minimum_results"] = minimum_results
         calls["minimum_top_score"] = minimum_top_score
         calls["prefer_langgraph"] = prefer_langgraph
+        calls["related_terms"] = related_terms
         calls["use_llm"] = use_llm
         calls["llm_model"] = llm_model
         calls["llm_temperature"] = llm_temperature
@@ -424,6 +492,7 @@ def test_cli_ask_routes_generated_answer_options_to_ask_service(
     assert calls["minimum_results"] == 2
     assert calls["minimum_top_score"] == 0.5
     assert calls["prefer_langgraph"] is False
+    assert calls["related_terms"] == []
     assert calls["use_llm"] is True
     assert calls["llm_model"] == "fake-model"
     assert calls["llm_temperature"] == 0.1
