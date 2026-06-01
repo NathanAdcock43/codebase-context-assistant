@@ -164,6 +164,8 @@ class RetrieveResponse(BaseModel):
     related_terms: list[str] = Field(default_factory=list)
     matched_related_terms: list[str] = Field(default_factory=list)
     retrieval_query: str | None = None
+    used_enrichment: bool = False
+    matched_enrichment_terms: list[str] = Field(default_factory=list)
     is_sufficient: bool
     insufficient_reason: str | None
     result_count: int
@@ -203,6 +205,8 @@ class AskResponse(BaseModel):
     question: str
     related_terms: list[str] = Field(default_factory=list)
     matched_related_terms: list[str] = Field(default_factory=list)
+    used_enrichment: bool = False
+    matched_enrichment_terms: list[str] = Field(default_factory=list)
     answer: str
     confidence: str
     is_grounded: bool
@@ -317,6 +321,8 @@ def create_app() -> FastAPI:
             related_terms=retrieval_response.related_terms,
             matched_related_terms=retrieval_response.matched_related_terms,
             retrieval_query=retrieval_response.retrieval_query,
+            used_enrichment=retrieval_response.used_enrichment,
+            matched_enrichment_terms=retrieval_response.matched_enrichment_terms,
             is_sufficient=retrieval_response.is_sufficient,
             insufficient_reason=retrieval_response.insufficient_reason,
             result_count=len(response_results),
@@ -359,6 +365,8 @@ def create_app() -> FastAPI:
             question=result.question,
             related_terms=result.related_terms,
             matched_related_terms=result.matched_related_terms,
+            used_enrichment=result.used_enrichment,
+            matched_enrichment_terms=result.matched_enrichment_terms,
             answer=result.answer,
             confidence=result.confidence,
             is_grounded=result.is_grounded,

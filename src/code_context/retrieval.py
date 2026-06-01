@@ -166,6 +166,15 @@ def retrieve_grounded_context(
     )
     results = restore_original_chunks(results, original_chunks_by_id)
     results = _prune_weak_trailing_results(results)
+    used_enrichment = any(
+        result.chunk.chunk_id in original_chunks_by_id
+        for result in results
+    )
+    matched_enrichment_terms = find_matched_enrichment_terms(
+        results=results,
+        query=retrieval_query,
+        snapshot=snapshot,
+    )
 
     requested_paths = extract_query_paths(normalized_query)
     insufficient_reason = _determine_insufficient_reason(
@@ -180,6 +189,8 @@ def retrieve_grounded_context(
         related_terms=normalized_related_terms,
         matched_related_terms=find_matched_related_terms(results, normalized_related_terms),
         retrieval_query=retrieval_query,
+        used_enrichment=used_enrichment,
+        matched_enrichment_terms=matched_enrichment_terms,
         is_sufficient=insufficient_reason is None,
         insufficient_reason=insufficient_reason,
         results=results,
@@ -274,6 +285,88 @@ def _format_enrichment_search_text(enrichment: FileEnrichment) -> str:
     ]
 
     return "\n".join(part for part in text_parts if part.strip())
+
+
+
+def find_matched_enrichment_terms(
+    *,
+    results: Sequence[SearchResult],
+    query: str,
+    snapshot: IndexSnapshot,
+) -> list[str]:
+    """Return fresh enrichment terms that match the retrieval query for returned chunks."""
+    if not results or not snapshot.enrichments:
+        return []
+
+    result_paths = {
+        _normalize_path(result.chunk.relative_path)
+        for result in results
+    }
+    file_hash_by_path = {
+        _normalize_path(file.relative_path): file.content_hash
+        for file in snapshot.files
+    }
+    query_tokens = _metadata_tokens(query)
+    normalized_query = query.casefold()
+
+    matched_terms: list[str] = []
+    seen_terms: set[str] = set()
+
+    for enrichment in snapshot.enrichments:
+        normalized_path = _normalize_path(enrichment.relative_path)
+        if normalized_path not in result_paths:
+            continue
+
+        if file_hash_by_path.get(normalized_path) != enrichment.source_hash:
+            continue
+
+        for term in _enrichment_match_terms(enrichment):
+            if not _term_matches_query(term, normalized_query, query_tokens):
+                continue
+
+            term_key = term.casefold()
+            if term_key in seen_terms:
+                continue
+
+            seen_terms.add(term_key)
+            matched_terms.append(term)
+
+    return matched_terms
+
+
+def _enrichment_match_terms(enrichment: FileEnrichment) -> list[str]:
+    terms: list[str] = []
+    terms.extend(enrichment.conceptual_terms)
+    terms.extend(enrichment.related_user_phrases)
+    terms.extend(enrichment.owned_behaviors)
+    terms.extend(enrichment.important_symbols)
+    return [term for term in terms if term.strip()]
+
+
+def _term_matches_query(
+    term: str,
+    normalized_query: str,
+    query_tokens: frozenset[str],
+) -> bool:
+    normalized_term = term.casefold().strip()
+    if not normalized_term:
+        return False
+
+    if normalized_term in normalized_query:
+        return True
+
+    term_tokens = _metadata_tokens(term)
+    return bool(term_tokens) and term_tokens.issubset(query_tokens)
+
+
+def _metadata_tokens(text: str) -> frozenset[str]:
+    cleaned = "".join(
+        character.casefold()
+        if character.isalnum() or character == "_"
+        else " "
+        for character in text
+    )
+    return frozenset(part for part in cleaned.split() if part)
 
 
 

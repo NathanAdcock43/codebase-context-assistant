@@ -147,6 +147,8 @@ class AskWorkflowResult(BaseModel):
     question: str
     related_terms: list[str] = Field(default_factory=list)
     matched_related_terms: list[str] = Field(default_factory=list)
+    used_enrichment: bool = False
+    matched_enrichment_terms: list[str] = Field(default_factory=list)
     answer: str
     confidence: str
     is_grounded: bool
@@ -211,12 +213,19 @@ def ask_indexed_code_question(
     is_grounded = bool(verification and verification.can_answer and verification.is_grounded)
     confidence = "grounded" if is_grounded else "insufficient_context"
     insufficient_reason = None if is_grounded else verification.reason if verification else None
-    sources = state.retrieval.results if state.retrieval else []
+    retrieval = state.retrieval
+    sources = retrieval.results if retrieval else []
 
     result = AskWorkflowResult(
         question=normalized_question,
         related_terms=normalized_related_terms,
         matched_related_terms=find_matched_related_terms(sources, normalized_related_terms),
+        used_enrichment=bool(retrieval and retrieval.used_enrichment),
+        matched_enrichment_terms=(
+            retrieval.matched_enrichment_terms
+            if retrieval
+            else []
+        ),
         answer=state.answer or "",
         confidence=confidence,
         is_grounded=is_grounded,

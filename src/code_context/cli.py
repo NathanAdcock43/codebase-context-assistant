@@ -373,6 +373,13 @@ def format_ask_result(result: AskWorkflowResult) -> str:
     if result.matched_related_terms:
         lines.append(f"Matched related terms: {', '.join(result.matched_related_terms)}")
 
+    lines.append(f"Used enrichment: {_yes_no(result.used_enrichment)}")
+
+    if result.matched_enrichment_terms:
+        lines.append(
+            f"Matched enrichment terms: {', '.join(result.matched_enrichment_terms)}"
+        )
+
     lines.extend(
         [
             f"Confidence: {result.confidence}",

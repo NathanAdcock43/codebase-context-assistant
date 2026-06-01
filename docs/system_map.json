@@ -803,6 +803,10 @@
       "restore_original_chunks",
       "_fresh_enrichment_text_by_path",
       "_format_enrichment_search_text",
+      "find_matched_enrichment_terms",
+      "_enrichment_match_terms",
+      "_term_matches_query",
+      "_metadata_tokens",
       "normalize_related_terms",
       "build_query_with_related_terms",
       "find_matched_related_terms",
@@ -3037,6 +3041,99 @@
       "test_compare_file_metadata_normalizes_windows_style_relative_paths",
       "test_compare_file_metadata_rejects_duplicate_relative_paths",
       "_file_metadata"
+    ],
+    "warnings": []
+  },
+  {
+    "path": "tests/test_enrichment_metadata.py",
+    "role": "Verify enrichment usage metadata across retrieval, API, and CLI paths.",
+    "layer": "tests",
+    "flow": "enrichment_metadata_validation",
+    "header_fields": {
+      "ROLE": "Verify enrichment usage metadata across retrieval, API, and CLI paths.",
+      "LAYER": "tests",
+      "FLOW": "enrichment_metadata_validation",
+      "INPUTS": [
+        "temporary repository files",
+        "file enrichment metadata",
+        "fuzzy developer questions",
+        "API ask requests",
+        "CLI ask commands"
+      ],
+      "OUTPUTS": [
+        "retrieval enrichment usage assertions",
+        "API enrichment metadata assertions",
+        "CLI enrichment metadata assertions"
+      ],
+      "UPSTREAM": [
+        "retrieval service",
+        "index store",
+        "FastAPI ask endpoint",
+        "CLI ask command"
+      ],
+      "DOWNSTREAM": [
+        "local test runs",
+        "future CI guardrails",
+        "enrichment explainability behavior"
+      ],
+      "OWNS": [
+        "enrichment usage metadata tests",
+        "matched enrichment term tests",
+        "end-to-end API and CLI enrichment metadata coverage"
+      ],
+      "DOES_NOT_OWN": [
+        "provider-backed enrichment generation",
+        "LLM calls",
+        "ChromaDB behavior",
+        "stale-index tests"
+      ],
+      "SIDE_EFFECTS": [
+        "writes temporary repository files through pytest tmp_path",
+        "writes temporary JSON index files through indexing pipeline",
+        "captures CLI terminal output"
+      ],
+      "STATE": {
+        "reads": [
+          "temporary repository files",
+          "temporary JSON index files"
+        ],
+        "writes": [
+          "temporary repository files",
+          "temporary JSON index files",
+          "captured stdout and stderr"
+        ]
+      },
+      "NOTES": [
+        "Enrichment metadata is a search aid, not source evidence.",
+        "Answers should still cite returned source chunks, not enrichment records."
+      ]
+    },
+    "imports": [
+      "__future__",
+      "code_context",
+      "code_context.api",
+      "code_context.index_store",
+      "code_context.models",
+      "code_context.pipeline",
+      "code_context.retrieval",
+      "fastapi.testclient",
+      "pathlib"
+    ],
+    "internal_imports": [
+      "code_context",
+      "code_context.api",
+      "code_context.index_store",
+      "code_context.models",
+      "code_context.pipeline",
+      "code_context.retrieval"
+    ],
+    "classes": [],
+    "functions": [
+      "test_retrieval_reports_enrichment_usage_metadata",
+      "test_api_ask_reports_enrichment_usage_metadata",
+      "test_cli_ask_prints_enrichment_usage_metadata",
+      "_index_repo_with_api_file",
+      "_add_api_enrichment"
     ],
     "warnings": []
   },

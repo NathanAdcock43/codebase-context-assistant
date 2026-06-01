@@ -163,6 +163,8 @@ class RetrievalResponse(BaseModel):
     related_terms: list[str] = Field(default_factory=list)
     matched_related_terms: list[str] = Field(default_factory=list)
     retrieval_query: str | None = Field(default=None)
+    used_enrichment: bool = False
+    matched_enrichment_terms: list[str] = Field(default_factory=list)
     is_sufficient: bool
     insufficient_reason: str | None = Field(default=None)
     results: list[SearchResult] = Field(default_factory=list)
